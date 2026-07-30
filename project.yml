@@ -27,6 +27,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.noguerol.pendulo
         PRODUCT_NAME: Pendulo
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Solo iPhone, solo portrait: decision D-003 en docs/decisiones.md
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_CFBundleDisplayName: "Péndulo"

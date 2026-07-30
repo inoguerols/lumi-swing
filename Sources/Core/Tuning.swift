@@ -232,6 +232,10 @@ enum Tuning {
 
         static let darkenDuration: CGFloat = 0.8
         static let darkAlpha: CGFloat = 0.96
+        /// Con «reducir parpadeos», el contraste entre ver y no ver se suaviza.
+        /// Sigue siendo penumbra —la mecánica no se toca—, pero el salto de
+        /// luminancia deja de ser agresivo.
+        static let reducedDarkAlpha: CGFloat = 0.72
         /// Opacidad del contorno de los muros con el refuerzo visual asistido
         /// (sin Taptic Engine o con hápticos apagados).
         static let assistedOutlineAlpha: CGFloat = 0.12

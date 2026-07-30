@@ -155,6 +155,26 @@ La alineación **sí** usa un advanced player con `loopEnabled` y `sendParameter
 
 El motor háptico está implementado, aislado tras el protocolo, con mock, con manejo de reset e interrupciones, y con 10 tests que atan el código a la tabla del documento (incluido uno que compara los siete valores de la tabla §2 uno a uno).
 
+## 2026-07-30 · D-017 · Material translúcido, no Liquid Glass
+
+**Decisión:** las tarjetas del menú y del game over usan `.ultraThinMaterial`, no el cristal de iOS 26.
+
+**Discrepancia consciente con el brief**, que pedía «Liquid Glass donde aporte». La respuesta honesta es: aquí no aporta. El cristal está diseñado para superponerse a contenido rico y variado; nuestro fondo es una escena oscura casi monocroma, sobre la que el efecto es indistinguible de un material translúcido normal. A cambio ataría parte de la UI a iOS 26 y obligaría a mantener dos caminos de código para el mismo resultado visual.
+
+Si el día de mañana el fondo del menú se vuelve más vistoso, el sitio donde cambiarlo es una sola `struct Card` en `Sources/UI/Shell.swift`.
+
+**Lo que sí se ha tomado de la estética actual:** SF Rounded en todo el shell, Dynamic Type en los textos de menú y ajustes (no en el HUD, que es parte de la escena), safe areas respetadas y `contentTransition(.numericText())` en el marcador del game over.
+
+---
+
+## 2026-07-30 · D-018 · La escena no corre si no se está jugando
+
+**Decisión:** `GameScene.update(_:)` sale inmediatamente si `model.phase != .playing`.
+
+**Por qué:** lo encontró la primera captura de S6. La escena empieza a correr en cuanto aparece, y entre ese instante y el momento en que el shell la pausa pasan varios frames: los suficientes para que el farolillo cayera, muriera, y el jugador se encontrara la pantalla de game over antes de haber tocado nada. Pausar desde fuera era una carrera; la guarda es un invariante.
+
+---
+
 ## 2026-07-30 · D-014 · A ciegas se apagan los muros, no las luces
 
 **Decisión:** en zona a ciegas desaparecen los muros, pero los faroles y el propio farolillo siguen viéndose: se dibujan por encima del velo oscuro.

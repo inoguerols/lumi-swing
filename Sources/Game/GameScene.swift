@@ -11,6 +11,8 @@ final class GameScene: SKScene {
 
     /// La escena habla con el protocolo, nunca con Core Haptics.
     private let haptics: any HapticsEngine
+    private let model: AppModel
+    private let settings: GameSettings
 
     private let worldNode = SKNode()
     private let cameraNode = SKCameraNode()
@@ -18,7 +20,6 @@ final class GameScene: SKScene {
     private let ropeNode = SKShapeNode()
     private var chunkNodes: [Int: SKNode] = [:]
     private let scoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-    private let deathLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
     private let blindNoticeLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
     private var darknessNode = SKShapeNode()
 
@@ -42,8 +43,10 @@ final class GameScene: SKScene {
     /// Posición de cámara sin el temblor sumado.
     private var cameraBase = CGPoint.zero
 
-    init(size: CGSize, haptics: any HapticsEngine) {
+    init(size: CGSize, haptics: any HapticsEngine, model: AppModel, settings: GameSettings) {
         self.haptics = haptics
+        self.model = model
+        self.settings = settings
         super.init(size: size)
         scaleMode = .aspectFill
         anchorPoint = CGPoint(x: 0, y: 0)
@@ -104,13 +107,6 @@ final class GameScene: SKScene {
         scoreLabel.text = "0"
         cameraNode.addChild(scoreLabel)
 
-        deathLabel.fontSize = Tuning.HUD.deathFontSize
-        deathLabel.fontColor = Palette.rope
-        deathLabel.position = CGPoint(x: 0, y: Tuning.HUD.deathOffsetY)
-        deathLabel.text = "toca para volver"
-        deathLabel.isHidden = true
-        cameraNode.addChild(deathLabel)
-
         // El velo se dibuja generoso porque `.aspectFill` recorta distinto en cada
         // iPhone, y un borde de mundo asomando por una esquina delataría el truco.
         let veil = CGRect(x: -Tuning.World.sceneWidth * 0.7,
@@ -135,6 +131,10 @@ final class GameScene: SKScene {
 
     override func update(_ currentTime: TimeInterval) {
         defer { lastUpdateTime = currentTime }
+        // Sin esta guarda, la escena corre durante los frames que hay entre que
+        // aparece y que el shell la pausa: el farolillo cae, muere, y el jugador se
+        // encuentra la pantalla de game over antes de haber tocado nada.
+        guard model.phase == .playing else { return }
         guard let lastUpdateTime else { return }
 
         let dt = CGFloat(currentTime - lastUpdateTime)
@@ -144,11 +144,16 @@ final class GameScene: SKScene {
             switch event {
             case .scored:
                 scoreLabel.text = "\(simulation.score)"
+                model.score = simulation.score
                 emit(.score)
             case .died:
-                deathLabel.isHidden = false
                 shakeRemaining = Tuning.Camera.deathShakeDuration
                 emit(.death)
+                model.score = simulation.score
+                model.isNewRecord = settings.record(score: simulation.score)
+                model.best = settings.best
+                GameCenter.submit(score: simulation.score)
+                model.phase = .dead
             case .grabbed:
                 squashOnGrab()
                 emit(.grab)
@@ -189,11 +194,23 @@ final class GameScene: SKScene {
     // MARK: - Input (uno solo: pulsado o no)
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if simulation.isDead {
-            restart()
-            return
-        }
+        // Fuera de la partida manda el shell de SwiftUI: si la escena atendiera
+        // toques con el menú abierto, el botón "Jugar" arrancaría un run y el toque
+        // que lo pulsó ya contaría como un agarre.
+        guard model.phase == .playing else { return }
         holding = true
+    }
+
+    /// Arranca una partida nueva. Lo llama el shell, no la propia escena.
+    func startRun() {
+        restart()
+        lastUpdateTime = nil
+    }
+
+    /// Deja el mundo quieto y visible detrás del menú.
+    func showMenuBackdrop() {
+        restart()
+        lastUpdateTime = nil
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { holding = false }
@@ -209,7 +226,6 @@ final class GameScene: SKScene {
 
         holding = false
         lastUpdateTime = nil
-        deathLabel.isHidden = true
         scoreLabel.text = "0"
 
         darkness = 0
@@ -295,7 +311,11 @@ final class GameScene: SKScene {
         let target: CGFloat = simulation.isBlind ? 1 : 0
         let rate = 1 / Tuning.BlindZone.darkenDuration
         darkness = lerp(darkness, target, 1 - exponentialDecay(rate: rate, dt: dt))
-        darknessNode.alpha = darkness * Tuning.BlindZone.darkAlpha
+
+        let peak = settings.reduceFlashing
+            ? Tuning.BlindZone.reducedDarkAlpha
+            : Tuning.BlindZone.darkAlpha
+        darknessNode.alpha = darkness * peak
     }
 
     /// Solo la primera vez en la vida de la instalación: a partir de ahí, el cartel
@@ -318,7 +338,9 @@ final class GameScene: SKScene {
     /// puede sentir: sin el escalonado serían 120 mensajes por segundo al actor
     /// diciendo casi lo mismo.
     private func feedHapticMap() {
-        guard simulation.isBlind,
+        let channelsOff = !settings.hapticsEnabled && !settings.audioEnabled
+        guard !channelsOff,
+              simulation.isBlind,
               let distance = simulation.distanceToNextWall else {
             guard proximityBucket != nil || alignmentBucket != nil else { return }
             proximityBucket = nil
@@ -353,6 +375,7 @@ final class GameScene: SKScene {
     /// Si un pulso llega dos milisegundos tarde no pasa nada; si el frame se pierde,
     /// sí.
     private func emit(_ signal: HapticSignal) {
+        guard settings.hapticsEnabled || settings.audioEnabled else { return }
         let haptics = self.haptics
         Task { await haptics.play(signal) }
     }
@@ -444,7 +467,11 @@ final class GameScene: SKScene {
 
     private func wallAlpha(for chunk: Chunk) -> CGFloat {
         guard chunk.isBlind else { return 1 }
-        let hidden = assistedMode ? Tuning.BlindZone.assistedOutlineAlpha : 0
+        // El contorno tenue aparece si no hay Taptic Engine, si el jugador ha
+        // apagado los hápticos, o si lo ha pedido por accesibilidad. Los tres casos
+        // son el mismo: se ha quedado sin el canal que sustituía a la vista.
+        let assisted = assistedMode || settings.needsAssistedBlindZones
+        let hidden = assisted ? Tuning.BlindZone.assistedOutlineAlpha : 0
         return lerp(1, hidden, darkness)
     }
 

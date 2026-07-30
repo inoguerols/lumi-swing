@@ -9,8 +9,8 @@ final class AppModel {
         case menu, playing, dead
     }
 
-    /// En S1 se entra directo a jugar; el menú llega en S6.
-    var phase: Phase = .playing
+    var phase: Phase = .menu
     var score = 0
     var best = 0
+    var isNewRecord = false
 }
