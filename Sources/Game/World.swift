@@ -81,29 +81,102 @@ enum WorldGenerator {
             + (isBlind ? Tuning.WorldGen.blindGapBonus : 0)
         let wallX = DifficultyCurve.wallX(forWall: index)
 
-        var lowestCenter = Tuning.World.floorY + Tuning.WorldGen.gapEdgeMargin + gapHeight / 2
-        var highestCenter = Tuning.World.ceilingY - Tuning.WorldGen.gapEdgeMargin - gapHeight / 2
-
-        // El primer muro se abre a la altura de partida: es la puerta de entrada al
-        // juego, no un sorteo.
-        if index == 1 {
-            let spread = Tuning.WorldGen.firstGapVerticalSpread
-            lowestCenter = max(lowestCenter, Tuning.Player.startY - spread)
-            highestCenter = min(highestCenter, Tuning.Player.startY + spread)
-        }
-
-        let gapCenterY = highestCenter > lowestCenter
-            ? rng.nextCGFloat(in: lowestCenter...highestCenter)
-            : Tuning.World.sceneHeight / 2
-
-        let wall = Wall(x: wallX, gapCenterY: gapCenterY, gapHeight: gapHeight)
+        let center = gapCenterY(forWall: index, seed: seed)
+        let wall = Wall(x: wallX, gapCenterY: center, gapHeight: gapHeight)
         return Chunk(index: index,
                      wall: wall,
-                     anchors: anchors(index: index, wallX: wallX, rng: &rng),
+                     anchors: anchors(index: index, wallX: wallX, gapCenterY: center, rng: &rng),
                      isBlind: isBlind)
     }
 
-    private static func anchors(index: Int, wallX: CGFloat, rng: inout SplitMix64) -> [Anchor] {
+    /// A qué altura tiene que estar un farol para que, **colgando de él**, el
+    /// jugador pueda ponerse a la altura del hueco.
+    ///
+    /// Con la cuerda tensa el farolillo vive entre `ancla − maxRope` y
+    /// `ancla − minRope`. Para que ese tramo cruce el hueco, el ancla tiene que
+    /// estar entre `hueco + minRope` y `hueco + maxRope`. Antes las anclas y los
+    /// huecos se sorteaban por separado y el 45 % de los huecos no se alcanzaba
+    /// balanceándose: había que soltarse y acertar una parábola a ciegas.
+    /// Entre qué alturas puede abrirse el hueco del muro `wall`.
+    ///
+    /// El techo no lo pone la pared, lo pone la cuerda: un hueco tan alto que su
+    /// farol tuviera que ir empotrado en el techo dejaría de alcanzarse
+    /// balanceándose, porque ese farol se quedaría corto.
+    static func gapBand(forWall wall: Int) -> ClosedRange<CGFloat> {
+        let gapHeight = DifficultyCurve.gapHeight(forWall: wall)
+            + (BlindZones.isBlind(wall: wall) ? Tuning.WorldGen.blindGapBonus : 0)
+
+        let lowest = Tuning.World.floorY + Tuning.WorldGen.gapEdgeMargin + gapHeight / 2
+        var highest = Tuning.World.ceilingY - Tuning.WorldGen.gapEdgeMargin - gapHeight / 2
+        highest = min(highest,
+                      Tuning.World.ceilingY
+                          - Tuning.WorldGen.anchorCeilingMargin
+                          - Tuning.Pendulum.ropeLength
+                          + Tuning.WorldGen.anchorHeightJitter)
+
+        return lowest...max(lowest, highest)
+    }
+
+    /// Altura del hueco del muro `wall`, como **cadena**: cada hueco se aparta del
+    /// anterior como mucho `maxGapStep`, de modo que dos muros seguidos nunca piden
+    /// un salto que el farolillo no pueda dar.
+    ///
+    /// Antes cada hueco se sorteaba libre dentro de su banda y aparecían escalones
+    /// de hasta 929 pt entre muros consecutivos —imposibles, no difíciles—. Sigue
+    /// siendo determinista: el mismo `(wall, seed)` da siempre el mismo resultado,
+    /// se pida en el orden que se pida.
+    ///
+    /// ponytail: recorre la cadena desde el principio, igual que `wallX`. Con cuatro
+    /// chunks vivos y un chunk nuevo por segundo, el coste es invisible.
+    static func gapCenterY(forWall wall: Int, seed: UInt64) -> CGFloat {
+        // El primero se abre a la altura de salida y con su farol al alcance: es la
+        // puerta de entrada al juego, no un sorteo.
+        let firstBand = gapBand(forWall: 1)
+        let spread = Tuning.WorldGen.firstGapVerticalSpread
+        let rope = Tuning.Pendulum.ropeLength
+        let jitter = Tuning.WorldGen.anchorHeightJitter
+        let reachableLow = Tuning.Player.startY + Tuning.WorldGen.firstAnchorMinOffsetY - rope - jitter
+        let reachableHigh = Tuning.Player.startY + Tuning.WorldGen.firstAnchorMaxOffsetY - rope + jitter
+
+        var current = clamp(Tuning.Player.startY,
+                            max(firstBand.lowerBound, max(Tuning.Player.startY - spread, reachableLow)),
+                            max(firstBand.lowerBound, min(firstBand.upperBound,
+                                                          min(Tuning.Player.startY + spread, reachableHigh))))
+        guard wall > 1 else { return current }
+
+        for index in 2...wall {
+            // Semilla propia para la cadena: así generar anclas no desplaza el
+            // sorteo de los huecos ni al revés.
+            var rng = SplitMix64(seed: seed
+                &+ UInt64(bitPattern: Int64(index)) &* 0x9E37_79B9_7F4A_7C15
+                &+ 0xA5A5_5A5A_C3C3_3C3C)
+            let step = rng.nextCGFloat(in: -Tuning.WorldGen.maxGapStep...Tuning.WorldGen.maxGapStep)
+            let band = gapBand(forWall: index)
+            current = clamp(current + step, band.lowerBound, band.upperBound)
+        }
+        return current
+    }
+
+    private static func intersection(_ a: ClosedRange<CGFloat>,
+                                     _ b: ClosedRange<CGFloat>) -> ClosedRange<CGFloat>? {
+        let lower = max(a.lowerBound, b.lowerBound)
+        let upper = min(a.upperBound, b.upperBound)
+        return lower <= upper ? lower...upper : nil
+    }
+
+    static func anchorHeightRange(forGapCenterY gapCenterY: CGFloat) -> ClosedRange<CGFloat> {
+        let ideal = gapCenterY + Tuning.Pendulum.ropeLength
+        let ceiling = Tuning.World.ceilingY - Tuning.WorldGen.anchorCeilingMargin
+        let jitter = Tuning.WorldGen.anchorHeightJitter
+        let lowest = min(ideal - jitter, ceiling)
+        let highest = min(ideal + jitter, ceiling)
+        return lowest...max(lowest, highest)
+    }
+
+    private static func anchors(index: Int,
+                                wallX: CGFloat,
+                                gapCenterY: CGFloat,
+                                rng: inout SplitMix64) -> [Anchor] {
         let previousWallX = index > 1
             ? DifficultyCurve.wallX(forWall: index - 1)
             : Tuning.Player.startX
@@ -111,7 +184,9 @@ enum WorldGenerator {
         let upper = wallX - Tuning.WorldGen.anchorWallClearance
         guard upper > lower else { return [] }
 
-        let yRange = Tuning.WorldGen.anchorMinY...Tuning.WorldGen.anchorMaxY
+        // La altura del farol la manda el hueco, no el azar: colgando de él hay que
+        // poder ponerse a la altura por la que se pasa.
+        let yRange = anchorHeightRange(forGapCenterY: gapCenterY)
         var count = Tuning.WorldGen.anchorsPerChunk
         if index >= Tuning.WorldGen.singleAnchorFromWall,
            rng.nextCGFloat(in: 0...1) < Tuning.WorldGen.singleAnchorChance {
@@ -125,10 +200,15 @@ enum WorldGenerator {
         if index == 1 {
             let reachableX = (Tuning.Player.startX + Tuning.WorldGen.firstAnchorMinOffsetX)
                 ... (Tuning.Player.startX + Tuning.WorldGen.firstAnchorMaxOffsetX)
+            // El primer farol tiene que cumplir dos cosas a la vez: estar al alcance
+            // desde el punto de partida y llevar al primer hueco. Se cruza el rango
+            // alcanzable con el que sirve para el hueco; si no se solapan, gana el
+            // del hueco, porque llegar al farol y no poder pasar es peor que nada.
             let reachableY = (Tuning.Player.startY + Tuning.WorldGen.firstAnchorMinOffsetY)
                 ... (Tuning.Player.startY + Tuning.WorldGen.firstAnchorMaxOffsetY)
+            let firstY = intersection(reachableY, yRange) ?? yRange
             let x = rng.nextCGFloat(in: reachableX)
-            let first = Anchor(position: CGPoint(x: x, y: rng.nextCGFloat(in: reachableY)))
+            let first = Anchor(position: CGPoint(x: x, y: rng.nextCGFloat(in: firstY)))
             let secondLower = x + Tuning.WorldGen.anchorMinSeparationX
             guard secondLower <= upper else { return [first] }
             return [first,

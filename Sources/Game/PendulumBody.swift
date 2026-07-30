@@ -55,6 +55,16 @@ struct PendulumBody: Sendable {
     /// ganar energía, y por eso mantener pulsado tiene coste — te da velocidad,
     /// pero te obliga a seguir el arco hasta el final.
     private mutating func pump(_ step: CGFloat, attachment: Attachment) {
+        // Solo se bombea por debajo del ancla, como en un columpio de verdad.
+        //
+        // Sin esta condición, mantener pulsado añadía energía en TODO el arco: el
+        // farolillo pasaba de 200 a 1500 pt/s en cuatro segundos y daba vueltas
+        // completas alrededor del farol. Eso no es un péndulo, es una honda — y
+        // traiciona el pilar 4 del GDD, porque un movimiento que se acelera solo no
+        // se puede anticipar. Ahora el arco tiene un techo natural: al subir se
+        // pierde impulso, y el jugador siempre sabe dónde va a acabar.
+        guard position.y < attachment.anchor.y else { return }
+
         let radial = (position - attachment.anchor).normalized
         let tangent = radial.perpendicular
         let along = velocity.dot(tangent)
@@ -107,10 +117,10 @@ struct PendulumBody: Sendable {
         }
 
         guard let best else { return false }
-        attachment = Attachment(anchor: best.anchor,
-                                ropeLength: clamp(best.distance,
-                                                  Tuning.Pendulum.minRopeLength,
-                                                  Tuning.Pendulum.maxRopeLength))
+        // Longitud fija, no la distancia a la que estabas al pulsar: así el punto más
+        // bajo del arco cae siempre en el hueco y el gesto se puede aprender en vez
+        // de sufrirlo.
+        attachment = Attachment(anchor: best.anchor, ropeLength: Tuning.Pendulum.ropeLength)
         return true
     }
 

@@ -9,10 +9,11 @@ struct WorldTests {
     func difficultyCurveMatchesGDD() {
         #expect(DifficultyCurve.spacing(forWall: 10) == Tuning.WorldGen.spacingStart)
         #expect(DifficultyCurve.gapHeight(forWall: 10) == Tuning.WorldGen.gapStart)
-        // A partir del muro 50 ambas están en su piso: el juego se vuelve exigente,
-        // no imposible.
-        #expect(DifficultyCurve.spacing(forWall: 50) == Tuning.WorldGen.spacingFloor)
-        #expect(DifficultyCurve.gapHeight(forWall: 50) == Tuning.WorldGen.gapFloor)
+        // Llega un punto en el que ambas tocan su piso y ahí se quedan: el juego se
+        // vuelve exigente, no imposible. (El muro exacto depende de dónde arranque el
+        // hueco; lo que importa es que el piso existe y no se rebasa.)
+        #expect(DifficultyCurve.spacing(forWall: 100) == Tuning.WorldGen.spacingFloor)
+        #expect(DifficultyCurve.gapHeight(forWall: 100) == Tuning.WorldGen.gapFloor)
     }
 
     @Test("La dificultad nunca retrocede")
@@ -79,9 +80,14 @@ struct WorldTests {
                 : Tuning.Player.startX
 
             #expect(!chunk.anchors.isEmpty)
+            // La invariante que de verdad importa: desde CUALQUIER farol del chunk,
+            // colgando, se llega a la altura del hueco. Antes las anclas se sorteaban
+            // por su cuenta y el 45 % de los huecos era inalcanzable balanceándose.
+            let reachable = WorldGenerator.anchorHeightRange(forGapCenterY: chunk.wall.gapCenterY)
             for anchor in chunk.anchors {
-                #expect(anchor.position.y >= Tuning.WorldGen.anchorMinY)
-                #expect(anchor.position.y <= Tuning.WorldGen.anchorMaxY)
+                #expect(anchor.position.y >= reachable.lowerBound - 0.001)
+                #expect(anchor.position.y <= reachable.upperBound + 0.001)
+                #expect(anchor.position.y <= Tuning.World.ceilingY)
                 #expect(anchor.position.x >= previousWallX + Tuning.WorldGen.anchorWallClearance - 0.001)
                 #expect(anchor.position.x <= chunk.wall.x - Tuning.WorldGen.anchorWallClearance + 0.001)
             }

@@ -71,13 +71,20 @@ enum Tuning {
         /// siguiente y la muerte se vuelve ilegible (pilar 2).
         static let maxSpeed: CGFloat = 1500
 
-        /// La cuerda toma la distancia real al ancla en el instante del agarre,
-        /// acotada a este rango. Con L=320 pt y g=2800 el periodo es 2,12 s, o sea
-        /// ~1,06 s por medio arco: justo lo que cuesta cruzar un chunk. Ese encaje
-        /// entre ritmo del péndulo y ritmo del mundo es lo que hace que el juego
-        /// se sienta cadencioso en vez de frenético.
-        static let minRopeLength: CGFloat = 220
-        static let maxRopeLength: CGFloat = 420
+        /// **La cuerda mide siempre lo mismo.** Antes tomaba la distancia real al
+        /// ancla en el instante del agarre, acotada a [220, 420] — y eso significaba
+        /// que engancharse cerca del farol te dejaba colgando alto y engancharse
+        /// lejos te dejaba colgando bajo, sin que el jugador lo decidiera ni pudiera
+        /// preverlo. Como el farol se coloca justo a esta distancia por encima del
+        /// hueco, con la cuerda fija **el punto más bajo del arco siempre queda
+        /// alineado con el hueco**: el jugador solo tiene que decidir cuándo soltar,
+        /// no a qué altura acabará. Un problema de dos dimensiones convertido en uno
+        /// de una.
+        ///
+        /// Con L=320 y g=2000 el periodo es 2,5 s: ~1,26 s por medio arco, del orden
+        /// de lo que cuesta cruzar un chunk. Ese encaje entre el ritmo del péndulo y
+        /// el del mundo es lo que hace el juego cadencioso en vez de frenético.
+        static let ropeLength: CGFloat = 320
 
         /// Radio de búsqueda de ancla al pulsar. Igual a la cuerda máxima: si algo
         /// está a distancia agarrable, es agarrable.
@@ -92,8 +99,11 @@ enum Tuning {
 
         /// Aceleración tangencial mientras se mantiene pulsado, en la dirección en
         /// la que ya se mueve. Es el "bombeo": la única forma de ganar energía.
-        static let tangentialPump: CGFloat = 1500
-        static let maxTangentialSpeed: CGFloat = 1500
+        /// Bajado de 1500 a 900 tras medirlo: con el tope antiguo, cinco segundos
+        /// pulsando llevaban al farolillo al máximo absoluto de velocidad. A 900 el
+        /// arco sigue ganando fuerza, pero el jugador puede leer dónde va a acabar.
+        static let tangentialPump: CGFloat = 900
+        static let maxTangentialSpeed: CGFloat = 900
 
         /// Pequeño impulso extra al soltar. 1,0 se siente romo; por encima de 1,15
         /// el jugador sale disparado y pierde el control.
@@ -149,8 +159,16 @@ enum Tuning {
         static let spacingDecayPerWall: CGFloat = 4.0
 
         /// Alto del hueco, misma forma de rampa.
-        static let gapStart: CGFloat = 240
-        static let gapFloor: CGFloat = 190
+        ///
+        /// Subido de 240/190 a 360/280 con un motivo medible: el jugador suelta en el
+        /// punto bajo del arco —a la altura del hueco— pero **cae durante el vuelo**.
+        /// Con media separación de muros (280 pt) a velocidad de crucero (~800 pt/s)
+        /// son 0,35 s de vuelo, es decir 122 pt de caída, y el hueco de 240 solo
+        /// perdonaba 94 a cada lado descontando el radio. El gesto correcto no cabía
+        /// por la puerta: el juego pedía anticipar la parábola con precisión de
+        /// simulador, no la sensación de un hiper-casual.
+        static let gapStart: CGFloat = 360
+        static let gapFloor: CGFloat = 280
         static let gapDecayPerWall: CGFloat = 1.3
 
         /// El muro a partir del cual la dificultad empieza a subir. Los 10
@@ -167,8 +185,28 @@ enum Tuning {
         static let singleAnchorFromWall: Int = 29
         static let singleAnchorChance: CGFloat = 0.25
 
-        /// Las anclas cuelgan por encima del jugador: el farolillo se balancea por
-        /// debajo, como un péndulo real.
+        /// Cuánto se mantienen los faroles por debajo del techo. Su altura ya no se
+        /// sortea: se deriva del hueco al que tienen que dar acceso (ver
+        /// `WorldGenerator.anchorHeightRange`). Este margen solo evita que un farol
+        /// quede incrustado en el techo.
+        static let anchorCeilingMargin: CGFloat = 40
+
+        /// Cuánto puede desviarse un farol de su altura ideal (`hueco + ropeLength`).
+        /// Con hueco de 240 pt y farolillo de 26 de radio sobran 94 pt a cada lado,
+        /// así que 40 da variedad visual sin que el punto bajo del arco deje de
+        /// caer dentro del hueco.
+        static let anchorHeightJitter: CGFloat = 40
+
+        /// Cuánto puede moverse un hueco respecto al del muro anterior.
+        ///
+        /// Sin este límite los huecos se sorteaban independientes y aparecían saltos
+        /// verticales de hasta 929 pt entre muros consecutivos, cuando el techo de
+        /// subida del farolillo ronda los 560: había tramos imposibles, no difíciles.
+        /// El mundo pasa a ser una **cadena**, no una lista de sorteos sueltos.
+        static let maxGapStep: CGFloat = 320
+
+        /// Franja histórica de altura de las anclas. Ya NO decide dónde van —eso lo
+        /// decide el hueco—; se conserva como referencia del espacio de juego.
         ///
         /// La franja se estrechó de [900, 1600] a [1050, 1450] al medir que un ancla
         /// a 1600 queda a más de `grabRadius` de la altura a la que vuela el jugador:
