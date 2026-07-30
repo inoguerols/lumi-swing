@@ -9,6 +9,9 @@ final class GameScene: SKScene {
     private var holding = false
     private var lastUpdateTime: TimeInterval?
 
+    /// La escena habla con el protocolo, nunca con Core Haptics.
+    private let haptics: any HapticsEngine
+
     private let worldNode = SKNode()
     private let cameraNode = SKCameraNode()
     private let playerNode = SKShapeNode(circleOfRadius: Tuning.Player.radius)
@@ -17,7 +20,8 @@ final class GameScene: SKScene {
     private let scoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
     private let deathLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
 
-    override init(size: CGSize) {
+    init(size: CGSize, haptics: any HapticsEngine) {
+        self.haptics = haptics
         super.init(size: size)
         scaleMode = .aspectFill
         anchorPoint = CGPoint(x: 0, y: 0)
@@ -53,6 +57,9 @@ final class GameScene: SKScene {
         syncWorld()
         // El primer frame coloca la cámara sin interpolar: si no, entra volando.
         cameraNode.position = CameraController.target(for: simulation.body.position)
+
+        let haptics = self.haptics
+        Task { await haptics.prepare() }
     }
 
     /// El HUD cuelga de la cámara, así que viaja con ella sin recolocarse por frame.
@@ -82,10 +89,19 @@ final class GameScene: SKScene {
             switch event {
             case .scored:
                 scoreLabel.text = "\(simulation.score)"
+                emit(.score)
             case .died:
                 deathLabel.isHidden = false
-            case .grabbed, .released, .missedGrab:
-                break   // su sitio son los hápticos (S3), no la pantalla
+                emit(.death)
+            case .grabbed:
+                emit(.grab)
+            case .released:
+                emit(.release)
+            case .missedGrab:
+                // Pulsar sobre el vacío no dice nada: el silencio ya informa de que
+                // no hay nada ahí. Una señal de error castigaría al jugador por
+                // explorar, que es justo como se aprende un juego de un solo input.
+                break
             }
         }
 
@@ -124,6 +140,14 @@ final class GameScene: SKScene {
 
         syncWorld()
         cameraNode.position = CameraController.target(for: simulation.body.position)
+    }
+
+    /// Fire-and-forget: el motor háptico es un actor y no puede bloquear el frame.
+    /// Si un pulso llega dos milisegundos tarde no pasa nada; si el frame se pierde,
+    /// sí.
+    private func emit(_ signal: HapticSignal) {
+        let haptics = self.haptics
+        Task { await haptics.play(signal) }
     }
 
     // MARK: - Presentación

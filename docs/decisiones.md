@@ -134,3 +134,25 @@ El test de D-008 falló nada más existir, y encontró tres cosas que ningún te
 **Y un arreglo del propio test:** la primera versión usaba un bot con una política fija. Murió con 0 puntos en las ocho semillas — pero contra el muro, no contra el suelo, y tras agarrarse hasta nueve veces. Es decir: el bot se columpiaba bien y no sabía apuntar al hueco. Un test así mide la calidad de mi bot, no la del mundo. Se sustituyó por **búsqueda aleatoria** (400 políticas por mundo, decisiones cada 0,05–0,35 s), que es lo que pedía D-008 desde el principio y responde la única pregunta que importa: ¿existe alguna forma de pasar?
 
 Lección para el resto del proyecto: un test de jugabilidad no debe contener una estrategia. Debe buscar una.
+
+---
+
+## 2026-07-30 · D-013 · El ritmo de proximidad lo lleva el motor, no un player en loop
+
+**Decisión:** los pulsos de proximidad se disparan uno a uno desde un bucle propio dentro del `actor`, con `Task.sleep` entre ellos y parámetros dinámicos por pulso. No se usa un `CHHapticAdvancedPatternPlayer` con `loopEnabled` para el tren de pulsos.
+
+**Discrepancia consciente con `docs/lenguaje-haptico.md` §7**, que proponía el player en loop.
+
+**Por qué:** la cadencia *es* la información. Un player en loop repite un patrón de duración fija: para cambiar el ritmo hay que regenerar el patrón o manipular la tasa de reproducción, y en ambos casos el intervalo real deja de ser exactamente el que dice la tabla. Con un bucle propio, el intervalo entre pulsos es literalmente el valor calculado, pulso a pulso, y responde al frame siguiente cuando cambia la distancia.
+
+La alineación **sí** usa un advanced player con `loopEnabled` y `sendParameters`, como decía el documento: ahí la señal es continua por naturaleza y lo que se modula es su intensidad, no su tiempo.
+
+**Coste asumido:** un `Task.sleep` no es un temporizador de tiempo real y puede desviarse unos milisegundos bajo carga. Para un ritmo cuyo rango va de 60 a 600 ms esa deriva es imperceptible — y sigue siendo más fiel que un loop cuya duración de patrón no coincide con el intervalo deseado.
+
+---
+
+## 2026-07-30 · S3 completado — lo que sigue sin poder validarse aquí
+
+El motor háptico está implementado, aislado tras el protocolo, con mock, con manejo de reset e interrupciones, y con 10 tests que atan el código a la tabla del documento (incluido uno que compara los siete valores de la tabla §2 uno a uno).
+
+Lo que **no** se puede verificar en este entorno: cómo se sienten. El simulador no tiene Taptic Engine — `supportsHaptics` devuelve `false` y todo cae al sustituto de audio. La pantalla de debug (cinco toques en la esquina superior izquierda) existe precisamente para eso: es el instrumento con el que hay que sentarse con el iPhone y ajustar. Hasta entonces, los valores de `Tuning.Haptics` son un diseño razonado, no una medición.
