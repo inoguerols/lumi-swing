@@ -81,43 +81,47 @@ Al morir: `phase = .dead`, la escena se **pausa** pero no se destruye. Al reinic
 
 ## 4. Estructura de carpetas
 
+Esta es la estructura **real** al cerrar S6. Algunos tipos que aquí se planearon en
+ficheros separados acabaron agrupados por cohesión (ver D-011): siete ficheros de
+veinte líneas no son más navegables que uno de ciento cincuenta con secciones.
+
 ```
 Sources/
   Core/
     Tuning.swift            ← TODOS los números del juego. Sin excepciones.
-    Geometry.swift           ← lerp, clamp, círculo-vs-AABB
+    Geometry.swift           ← lerp, clamp, vectores, decaimiento exponencial
     RandomGenerator.swift    ← SplitMix64 determinista (Sendable)
-    Persistence.swift        ← récord y ajustes (UserDefaults)
+    Palette.swift            ← colores y ciclo de cielo (D-009)
+    Persistence.swift        ← GameSettings: récord y ajustes (UserDefaults)
+    AppModel.swift           ← fase menu/playing/dead, observada por SwiftUI
+    GameCenter.swift         ← leaderboard, opcional y silenciosa si falla
   Game/
-    GameSimulation.swift     ← orquestador puro; advance(dt:input:) -> [GameEvent]
+    World.swift              ← Chunk, Wall, Anchor, ObstacleKind,
+                                DifficultyCurve, BlindZones, WorldGenerator
     PendulumBody.swift       ← estado e integración del farolillo
-    WorldGenerator.swift     ← chunks deterministas por índice
-    Chunk.swift              ← Wall, Anchor, Chunk (modelos de valor)
-    Collision.swift          ← detección pura
-    BlindZones.swift          ← qué chunks son a ciegas, según la curva del GDD
-    GameScene.swift          ← SpriteKit: nodos, input, cámara
-    CameraController.swift    ← look-ahead, shake
-    Effects.swift            ← estela, partículas, squash & stretch (S5)
+    Collision.swift          ← círculo vs AABB, puro
+    GameSimulation.swift     ← orquestador puro + GameEvent + CameraController
+    Effects.swift            ← temblor, estela y ciclo de cielo (puros)
+    GameScene.swift          ← SpriteKit: nodos, input, cámara, HUD
   Haptics/
-    HapticsEngine.swift      ← protocolo + HapticSignal (el vocabulario)
-    CoreHapticsEngine.swift  ← implementación real
-    MockHapticsEngine.swift  ← registra señales; para tests y simulador
-    HapticPatterns.swift     ← construcción de CHHapticPattern
-    ProximityMapping.swift   ← distancia → (intervalo, intensity, sharpness). PURO.
-    AudioCueEngine.swift     ← AVAudioEngine, refuerzo y sustitución
+    Haptics.swift            ← HapticSignal, protocolo, ProximityMapping, mock
+    CoreHapticsEngine.swift  ← actor con CHHapticEngine y sus patrones
+    AudioCueEngine.swift     ← actor con AVAudioEngine: refuerzo y sustitución
   UI/
-    PenduloApp.swift
-    RootView.swift
-    MenuView.swift
-    GameOverView.swift
-    SettingsView.swift
-    HapticsDebugView.swift
-Tests/
-  PendulumBodyTests.swift
-  WorldGeneratorTests.swift
-  CollisionTests.swift
-  ProximityMappingTests.swift
-  SolvabilityTests.swift      ← el test que importa (ver §6)
+    PenduloApp.swift         ← @main + RootView (orquesta las fases)
+    Shell.swift              ← MenuView, GameOverView, SettingsView
+    HapticsDebugView.swift   ← el instrumento para tunear en el iPhone
+  Resources/
+    Assets.xcassets          ← icono placeholder generado por código
+Tests/                        ← 40 tests, sin simulador
+  PendulumBodyTests.swift     ← invariantes de física
+  WorldTests.swift            ← generación, dificultad, zonas a ciegas
+  GameplayTests.swift         ← colisiones + resolubilidad por búsqueda
+  BlindZoneTests.swift        ← la prueba de aceptación de la mecánica firma
+  HapticsTests.swift          ← el código contra la tabla del documento
+  SettingsTests.swift         ← récord y accesibilidad
+UITests/                      ← 3 tests conduciendo la app real
+  PlayFlowUITests.swift       ← jugar, morir, reintentar, ajustes
 ```
 
 ## 5. Generación procedural por chunks
