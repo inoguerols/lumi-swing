@@ -81,8 +81,17 @@ enum WorldGenerator {
             + (isBlind ? Tuning.WorldGen.blindGapBonus : 0)
         let wallX = DifficultyCurve.wallX(forWall: index)
 
-        let lowestCenter = Tuning.World.floorY + Tuning.WorldGen.gapEdgeMargin + gapHeight / 2
-        let highestCenter = Tuning.World.ceilingY - Tuning.WorldGen.gapEdgeMargin - gapHeight / 2
+        var lowestCenter = Tuning.World.floorY + Tuning.WorldGen.gapEdgeMargin + gapHeight / 2
+        var highestCenter = Tuning.World.ceilingY - Tuning.WorldGen.gapEdgeMargin - gapHeight / 2
+
+        // El primer muro se abre a la altura de partida: es la puerta de entrada al
+        // juego, no un sorteo.
+        if index == 1 {
+            let spread = Tuning.WorldGen.firstGapVerticalSpread
+            lowestCenter = max(lowestCenter, Tuning.Player.startY - spread)
+            highestCenter = min(highestCenter, Tuning.Player.startY + spread)
+        }
+
         let gapCenterY = highestCenter > lowestCenter
             ? rng.nextCGFloat(in: lowestCenter...highestCenter)
             : Tuning.World.sceneHeight / 2
@@ -109,6 +118,23 @@ enum WorldGenerator {
             count = 1
         }
         if upper - lower < Tuning.WorldGen.anchorMinSeparationX { count = 1 }
+
+        // El primer farol de la partida no se sortea a ciegas: se coloca donde el
+        // jugador pueda alcanzarlo desde su posición inicial. Empezar sin asidero
+        // no es dificultad, es una partida perdida antes de tocar la pantalla.
+        if index == 1 {
+            let reachableX = (Tuning.Player.startX + Tuning.WorldGen.firstAnchorMinOffsetX)
+                ... (Tuning.Player.startX + Tuning.WorldGen.firstAnchorMaxOffsetX)
+            let reachableY = (Tuning.Player.startY + Tuning.WorldGen.firstAnchorMinOffsetY)
+                ... (Tuning.Player.startY + Tuning.WorldGen.firstAnchorMaxOffsetY)
+            let x = rng.nextCGFloat(in: reachableX)
+            let first = Anchor(position: CGPoint(x: x, y: rng.nextCGFloat(in: reachableY)))
+            let secondLower = x + Tuning.WorldGen.anchorMinSeparationX
+            guard secondLower <= upper else { return [first] }
+            return [first,
+                    Anchor(position: CGPoint(x: rng.nextCGFloat(in: secondLower...upper),
+                                             y: rng.nextCGFloat(in: yRange)))]
+        }
 
         if count == 1 {
             return [Anchor(position: CGPoint(x: rng.nextCGFloat(in: lower...upper),

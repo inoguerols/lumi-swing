@@ -14,6 +14,8 @@ final class GameScene: SKScene {
     private let playerNode = SKShapeNode(circleOfRadius: Tuning.Player.radius)
     private let ropeNode = SKShapeNode()
     private var chunkNodes: [Int: SKNode] = [:]
+    private let scoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+    private let deathLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
 
     override init(size: CGSize) {
         super.init(size: size)
@@ -46,9 +48,27 @@ final class GameScene: SKScene {
         playerNode.glowWidth = 12
         worldNode.addChild(playerNode)
 
+        buildHUD()
+
         syncWorld()
         // El primer frame coloca la cámara sin interpolar: si no, entra volando.
         cameraNode.position = CameraController.target(for: simulation.body.position)
+    }
+
+    /// El HUD cuelga de la cámara, así que viaja con ella sin recolocarse por frame.
+    private func buildHUD() {
+        scoreLabel.fontSize = Tuning.HUD.scoreFontSize
+        scoreLabel.fontColor = Palette.lantern
+        scoreLabel.position = CGPoint(x: 0, y: Tuning.HUD.scoreOffsetY)
+        scoreLabel.text = "0"
+        cameraNode.addChild(scoreLabel)
+
+        deathLabel.fontSize = Tuning.HUD.deathFontSize
+        deathLabel.fontColor = Palette.rope
+        deathLabel.position = CGPoint(x: 0, y: Tuning.HUD.deathOffsetY)
+        deathLabel.text = "toca para volver"
+        deathLabel.isHidden = true
+        cameraNode.addChild(deathLabel)
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -58,7 +78,17 @@ final class GameScene: SKScene {
         let dt = CGFloat(currentTime - lastUpdateTime)
         guard dt > 0 else { return }
 
-        _ = simulation.advance(dt: dt, holding: holding)
+        for event in simulation.advance(dt: dt, holding: holding) {
+            switch event {
+            case .scored:
+                scoreLabel.text = "\(simulation.score)"
+            case .died:
+                deathLabel.isHidden = false
+            case .grabbed, .released, .missedGrab:
+                break   // su sitio son los hápticos (S3), no la pantalla
+            }
+        }
+
         syncWorld()
         cameraNode.position = CameraController.smoothed(
             current: cameraNode.position,
@@ -68,9 +98,33 @@ final class GameScene: SKScene {
 
     // MARK: - Input (uno solo: pulsado o no)
 
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) { holding = true }
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if simulation.isDead {
+            restart()
+            return
+        }
+        holding = true
+    }
+
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { holding = false }
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { holding = false }
+
+    /// Reinicio sin reconstruir la escena: resetear structs y reposicionar nodos
+    /// cuesta un frame. Instanciar una `SKScene` nueva se comería el presupuesto
+    /// de 300 ms del brief entero.
+    private func restart() {
+        simulation.reset(seed: Tuning.WorldGen.initialSeed)
+        for node in chunkNodes.values { node.removeFromParent() }
+        chunkNodes.removeAll()
+
+        holding = false
+        lastUpdateTime = nil
+        deathLabel.isHidden = true
+        scoreLabel.text = "0"
+
+        syncWorld()
+        cameraNode.position = CameraController.target(for: simulation.body.position)
+    }
 
     // MARK: - Presentación
 

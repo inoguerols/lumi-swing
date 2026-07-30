@@ -57,10 +57,15 @@ enum Tuning {
     // MARK: - Física del péndulo
 
     enum Pendulum {
-        /// Gravedad alta a propósito. En una escena de 1500 pt de alto, 2800 pt/s²
-        /// da el peso del pilar 4 del GDD; con 1200 el farolillo flota y el arco
-        /// se siente de gelatina.
-        static let gravity: CGFloat = 2800
+        /// Gravedad alta a propósito, para el peso del pilar 4 del GDD: con 1200 el
+        /// farolillo flota y el arco se siente de gelatina.
+        ///
+        /// Bajada de 2800 a 2000 tras la primera medición real (S2): con 2800 el
+        /// farolillo recorría los 1500 pt del playfield en 0,73 s, o sea que tocaba
+        /// suelo antes de alcanzar el primer muro. A 2000 la caída completa dura
+        /// 1,22 s y el medio arco con cuerda de 320 pt queda en 1,26 s — sigue
+        /// siendo un péndulo con masa, pero deja tiempo para leer el mundo.
+        static let gravity: CGFloat = 2000
 
         /// Tope de velocidad. Por encima, el jugador no puede reaccionar al muro
         /// siguiente y la muerte se vuelve ilegible (pilar 2).
@@ -162,10 +167,31 @@ enum Tuning {
         static let singleAnchorFromWall: Int = 29
         static let singleAnchorChance: CGFloat = 0.25
 
-        /// Las anclas cuelgan en la mitad superior: el farolillo se balancea por
+        /// Las anclas cuelgan por encima del jugador: el farolillo se balancea por
         /// debajo, como un péndulo real.
-        static let anchorMinY: CGFloat = 900
-        static let anchorMaxY: CGFloat = 1600
+        ///
+        /// La franja se estrechó de [900, 1600] a [1050, 1450] al medir que un ancla
+        /// a 1600 queda a más de `grabRadius` de la altura a la que vuela el jugador:
+        /// era inalcanzable, y el mundo generaba tramos sin asidero. Con este rango y
+        /// una cuerda de 220–420 pt, el farolillo oscila entre y≈630 y y≈1230, bien
+        /// centrado en el playfield.
+        static let anchorMinY: CGFloat = 1050
+        static let anchorMaxY: CGFloat = 1450
+
+        /// El hueco del primer muro se abre a la altura a la que arranca el jugador,
+        /// no en cualquier punto del playfield. El GDD promete diez muros de tutorial
+        /// silencioso: sortear el primer hueco 700 pt por encima o por debajo del
+        /// punto de partida es lo contrario de un tutorial.
+        static let firstGapVerticalSpread: CGFloat = 120
+
+        /// El primer farol siempre está al alcance desde el punto de partida.
+        /// El arranque no es sitio para poner a prueba la suerte del jugador: la
+        /// distancia máxima que permiten estos rangos es 397 pt, por debajo de los
+        /// 430 de `grabRadius`.
+        static let firstAnchorMinOffsetX: CGFloat = 150
+        static let firstAnchorMaxOffsetX: CGFloat = 300
+        static let firstAnchorMinOffsetY: CGFloat = 100
+        static let firstAnchorMaxOffsetY: CGFloat = 260
 
         /// Separación mínima entre las dos anclas de un chunk, y separación mínima
         /// de cada ancla respecto a los muros que delimitan el chunk.
@@ -299,6 +325,19 @@ enum Tuning {
         /// cuando es sustituto (no hay). Sustituyendo tiene que oírse de verdad.
         static let reinforcementGain: CGFloat = 0.45
         static let substituteGain: CGFloat = 1.0
+    }
+
+    // MARK: - HUD dentro de la escena
+    //
+    // El marcador es parte del juego, no del shell: vive en la escena y viaja con
+    // la cámara. Los menús de SwiftUI llegan en S6.
+
+    enum HUD {
+        static let scoreFontSize: CGFloat = 120
+        static let deathFontSize: CGFloat = 64
+        /// Desplazamientos respecto al centro de la cámara.
+        static let scoreOffsetY: CGFloat = 760
+        static let deathOffsetY: CGFloat = -160
     }
 
     // MARK: - Game feel

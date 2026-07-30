@@ -118,3 +118,19 @@ S1 compila, corre en simulador y pasa 15 tests. Pero **el game feel sigue sin va
 Señal ya observada en la primera captura: con `gravity = 2800` el farolillo recorre el alto entero del playfield en caída libre en poco más de un segundo. Es coherente con el periodo de péndulo que buscábamos (~1 s por medio arco), pero deja **muy poco margen de reacción antes del primer agarre**. Es el candidato número uno a ajuste en cuanto se juegue de verdad; no se toca antes, porque cambiar constantes a ciegas es exactamente lo que produce un juego sin carácter.
 
 La herramienta que sí puede pronunciarse sin un humano delante es el test de resolubilidad (D-008), que llega en S2 con las colisiones.
+
+---
+
+## 2026-07-30 · D-012 · Tres arreglos de diseño que encontró el test de resolubilidad
+
+El test de D-008 falló nada más existir, y encontró tres cosas que ningún test de unidad habría visto. Las tres eran fallos de diseño, no del test:
+
+1. **`gravity` 2800 → 2000.** Con 2800 el farolillo recorría los 1500 pt del playfield en 0,73 s: tocaba suelo antes de llegar al primer muro (x = 900). A 2000 la caída completa dura 1,22 s y el medio arco con cuerda de 320 pt queda en 1,26 s. Sigue teniendo masa; ahora deja tiempo para leer el mundo.
+
+2. **Franja de anclas [900, 1600] → [1050, 1450].** Un ancla a y = 1600 queda a más de `grabRadius` (430 pt) de la altura a la que vuela el jugador: era decorado inalcanzable, y el generador producía tramos sin un solo asidero válido.
+
+3. **El arranque no se sortea.** El primer farol se coloca ahora dentro del radio de agarre desde el punto de partida (397 pt como máximo), y el hueco del primer muro se abre a la altura de partida ±120 pt. Antes, ese hueco podía caer 700 pt más arriba o más abajo con 0,7 s para llegar. El GDD promete diez muros de tutorial silencioso; sortear la primera puerta en todo el alto del playfield es exactamente lo contrario.
+
+**Y un arreglo del propio test:** la primera versión usaba un bot con una política fija. Murió con 0 puntos en las ocho semillas — pero contra el muro, no contra el suelo, y tras agarrarse hasta nueve veces. Es decir: el bot se columpiaba bien y no sabía apuntar al hueco. Un test así mide la calidad de mi bot, no la del mundo. Se sustituyó por **búsqueda aleatoria** (400 políticas por mundo, decisiones cada 0,05–0,35 s), que es lo que pedía D-008 desde el principio y responde la única pregunta que importa: ¿existe alguna forma de pasar?
+
+Lección para el resto del proyecto: un test de jugabilidad no debe contener una estrategia. Debe buscar una.

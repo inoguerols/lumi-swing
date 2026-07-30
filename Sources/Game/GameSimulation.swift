@@ -6,6 +6,9 @@ enum GameEvent: Sendable, Equatable {
     case grabbed
     case released
     case missedGrab
+    /// Cuántos puntos sumó ese muro: 1, o el doble si era a ciegas.
+    case scored(Int)
+    case died(ObstacleKind)
 }
 
 /// Orquestador puro. No sabe que existen SpriteKit ni Core Haptics: avanza y
@@ -15,10 +18,14 @@ struct GameSimulation: Sendable {
 
     private(set) var body: PendulumBody
     private(set) var chunks: [Chunk] = []
+    private(set) var score = 0
+    private(set) var isDead = false
 
     private var seed: UInt64
     private var nextChunkIndex = 1
     private var wasHolding = false
+    /// Los muros se cruzan en orden, así que basta con recordar el último puntuado.
+    private var lastScoredWall = 0
 
     init(seed: UInt64) {
         self.seed = seed
@@ -34,10 +41,14 @@ struct GameSimulation: Sendable {
         chunks = []
         nextChunkIndex = 1
         wasHolding = false
+        lastScoredWall = 0
+        score = 0
+        isDead = false
         refillChunks()
     }
 
     mutating func advance(dt: CGFloat, holding: Bool) -> [GameEvent] {
+        guard !isDead else { return [] }
         var events: [GameEvent] = []
 
         // El input es un flanco, no un estado: pulsar engancha una vez, no cada frame.
@@ -50,7 +61,30 @@ struct GameSimulation: Sendable {
         wasHolding = holding
 
         body.advance(dt: dt, holding: holding)
+
+        if let obstacle = Collision.hit(position: body.position,
+                                        radius: Tuning.Player.radius,
+                                        chunks: chunks) {
+            isDead = true
+            events.append(.died(obstacle))
+            return events
+        }
+
+        events.append(contentsOf: collectScore())
         refillChunks()
+        return events
+    }
+
+    private mutating func collectScore() -> [GameEvent] {
+        var events: [GameEvent] = []
+        for chunk in chunks
+        where chunk.index > lastScoredWall && body.position.x >= chunk.wall.x {
+            lastScoredWall = chunk.index
+            // La mecánica firma no se tolera: se recompensa.
+            let points = chunk.isBlind ? Tuning.BlindZone.scoreMultiplier : 1
+            score += points
+            events.append(.scored(points))
+        }
         return events
     }
 
