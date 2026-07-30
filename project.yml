@@ -1,0 +1,62 @@
+name: Pendulo
+
+options:
+  bundleIdPrefix: com.noguerol
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  Pendulo:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.noguerol.pendulo
+        PRODUCT_NAME: Pendulo
+        GENERATE_INFOPLIST_FILE: YES
+        # Solo iPhone, solo portrait: decision D-003 en docs/decisiones.md
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_CFBundleDisplayName: "Péndulo"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
+        INFOPLIST_KEY_UIStatusBarHidden: YES
+        # ProMotion: sin esto iOS limita el juego a 60 Hz (slice S5)
+        INFOPLIST_KEY_CADisableMinimumFrameDurationOnPhone: YES
+
+  PenduloTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Pendulo
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Pendulo:
+    build:
+      targets:
+        Pendulo: all
+        PenduloTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - PenduloTests

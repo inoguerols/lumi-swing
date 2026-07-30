@@ -1,0 +1,14 @@
+# XcodeGen genera esto; la fuente de verdad es project.yml
+*.xcodeproj
+*.xcworkspace
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# macOS
+.DS_Store
