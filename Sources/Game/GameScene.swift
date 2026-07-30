@@ -19,6 +19,20 @@ final class GameScene: SKScene {
     private var chunkNodes: [Int: SKNode] = [:]
     private let scoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
     private let deathLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+    private let blindNoticeLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+    private var darknessNode = SKShapeNode()
+
+    /// 0 = se ve todo, 1 = a ciegas. Se interpola en vez de conmutar: el corte seco
+    /// a negro asusta, y la penumbra progresiva avisa de lo que llega.
+    private var darkness: CGFloat = 0
+
+    /// Sin Taptic Engine la ceguera total no es un reto, es un muro: se deja un
+    /// contorno tenue (docs/lenguaje-haptico.md §6.1).
+    private var assistedMode = false
+
+    /// Throttle de las llamadas al motor háptico.
+    private var proximityBucket: Int?
+    private var alignmentBucket: Int?
 
     init(size: CGSize, haptics: any HapticsEngine) {
         self.haptics = haptics
@@ -50,6 +64,10 @@ final class GameScene: SKScene {
         playerNode.strokeColor = Palette.lanternGlow
         playerNode.lineWidth = 10
         playerNode.glowWidth = 12
+        // El farolillo también es una luz: se ve a ciegas. Si desapareciera, el
+        // jugador perdería la única referencia de dónde está.
+        playerNode.zPosition = Self.lightZPosition
+        ropeNode.zPosition = Self.lightZPosition - 1
         worldNode.addChild(playerNode)
 
         buildHUD()
@@ -59,7 +77,12 @@ final class GameScene: SKScene {
         cameraNode.position = CameraController.target(for: simulation.body.position)
 
         let haptics = self.haptics
-        Task { await haptics.prepare() }
+        Task {
+            await haptics.prepare()
+            // Sin Taptic Engine se activa el refuerzo visual: la ceguera total solo
+            // es un reto si hay un canal que la sustituya.
+            assistedMode = await haptics.capabilities.needsFullSubstitution
+        }
     }
 
     /// El HUD cuelga de la cámara, así que viaja con ella sin recolocarse por frame.
@@ -76,6 +99,27 @@ final class GameScene: SKScene {
         deathLabel.text = "toca para volver"
         deathLabel.isHidden = true
         cameraNode.addChild(deathLabel)
+
+        // El velo se dibuja generoso porque `.aspectFill` recorta distinto en cada
+        // iPhone, y un borde de mundo asomando por una esquina delataría el truco.
+        let veil = CGRect(x: -Tuning.World.sceneWidth * 0.7,
+                          y: -Tuning.World.sceneHeight * 0.7,
+                          width: Tuning.World.sceneWidth * 1.4,
+                          height: Tuning.World.sceneHeight * 1.4)
+        darknessNode = SKShapeNode(rect: veil)
+        darknessNode.fillColor = .black
+        darknessNode.strokeColor = .clear
+        darknessNode.alpha = 0
+        darknessNode.zPosition = 10
+        cameraNode.addChild(darknessNode)
+
+        blindNoticeLabel.fontSize = Tuning.HUD.deathFontSize
+        blindNoticeLabel.fontColor = Palette.rope
+        blindNoticeLabel.position = CGPoint(x: 0, y: Tuning.HUD.blindNoticeOffsetY)
+        blindNoticeLabel.text = "a ciegas · fíate del tacto"
+        blindNoticeLabel.alpha = 0
+        blindNoticeLabel.zPosition = 11
+        cameraNode.addChild(blindNoticeLabel)
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -102,9 +146,16 @@ final class GameScene: SKScene {
                 // no hay nada ahí. Una señal de error castigaría al jugador por
                 // explorar, que es justo como se aprende un juego de un solo input.
                 break
+            case .enteredBlindZone:
+                emit(.blindEnter)
+                showBlindNoticeIfFirstTime()
+            case .exitedBlindZone:
+                emit(.blindExit)
             }
         }
 
+        updateDarkness(dt: dt)
+        feedHapticMap()
         syncWorld()
         cameraNode.position = CameraController.smoothed(
             current: cameraNode.position,
@@ -138,8 +189,75 @@ final class GameScene: SKScene {
         deathLabel.isHidden = true
         scoreLabel.text = "0"
 
+        darkness = 0
+        darknessNode.alpha = 0
+        proximityBucket = nil
+        alignmentBucket = nil
+        let haptics = self.haptics
+        Task { await haptics.stopContinuous() }
+
         syncWorld()
         cameraNode.position = CameraController.target(for: simulation.body.position)
+    }
+
+    // MARK: - Zonas a ciegas
+
+    private func updateDarkness(dt: CGFloat) {
+        let target: CGFloat = simulation.isBlind ? 1 : 0
+        let rate = 1 / Tuning.BlindZone.darkenDuration
+        darkness = lerp(darkness, target, 1 - exponentialDecay(rate: rate, dt: dt))
+        darknessNode.alpha = darkness * Tuning.BlindZone.darkAlpha
+    }
+
+    /// Solo la primera vez en la vida de la instalación: a partir de ahí, el cartel
+    /// sería ruido. Quien ya sabe que los muros desaparecen no necesita que se lo
+    /// recuerden cada doce muros.
+    private func showBlindNoticeIfFirstTime() {
+        let key = "pendulo.blindNoticeSeen"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+
+        blindNoticeLabel.removeAllActions()
+        blindNoticeLabel.run(.sequence([
+            .fadeIn(withDuration: 0.35),
+            .wait(forDuration: TimeInterval(Tuning.HUD.blindNoticeDuration)),
+            .fadeOut(withDuration: 0.6)
+        ]))
+    }
+
+    /// Traduce la geometría a idioma háptico. Solo habla cuando cambia algo que se
+    /// puede sentir: sin el escalonado serían 120 mensajes por segundo al actor
+    /// diciendo casi lo mismo.
+    private func feedHapticMap() {
+        guard simulation.isBlind,
+              let distance = simulation.distanceToNextWall else {
+            guard proximityBucket != nil || alignmentBucket != nil else { return }
+            proximityBucket = nil
+            alignmentBucket = nil
+            let haptics = self.haptics
+            Task { await haptics.stopContinuous() }
+            return
+        }
+
+        let bucket = Int(distance / Tuning.Haptics.proximityUpdateQuantum)
+        if bucket != proximityBucket {
+            proximityBucket = bucket
+            let haptics = self.haptics
+            Task { await haptics.updateProximity(distance: distance) }
+        }
+
+        // El margen puede ser negativo (no cabe); el motor entiende `nil` como
+        // "desalineado" y esa es toda la señal que hace falta.
+        let clearance = simulation.clearanceAtNextWall ?? -1
+        let alignBucket = clearance > 0
+            ? Int(clearance / Tuning.Haptics.alignmentUpdateQuantum)
+            : -1
+        if alignBucket != alignmentBucket {
+            alignmentBucket = alignBucket
+            let haptics = self.haptics
+            let value: CGFloat? = clearance > 0 ? clearance : nil
+            Task { await haptics.updateAlignment(clearance: value) }
+        }
     }
 
     /// Fire-and-forget: el motor háptico es un actor y no puede bloquear el frame.
@@ -165,6 +283,12 @@ final class GameScene: SKScene {
             worldNode.addChild(node)
         }
 
+        for chunk in simulation.chunks where chunk.isBlind {
+            chunkNodes[chunk.index]?
+                .childNode(withName: Self.wallsNodeName)?
+                .alpha = wallAlpha(for: chunk)
+        }
+
         playerNode.position = simulation.body.position
 
         if let attachment = simulation.body.attachment {
@@ -183,6 +307,11 @@ final class GameScene: SKScene {
         let wall = chunk.wall
         let thickness = Tuning.World.wallThickness
 
+        // Los muros van en su propio subnodo para poder desvanecerlos sin arrastrar
+        // a los faroles.
+        let walls = SKNode()
+        walls.name = Self.wallsNodeName
+
         // Dos tramos: del suelo al borde inferior del hueco, y del superior al techo.
         let segments = [
             (Tuning.World.floorY, wall.gapBottomY),
@@ -196,9 +325,17 @@ final class GameScene: SKScene {
             node.fillColor = Palette.wall
             node.strokeColor = Palette.wallEdge
             node.lineWidth = 2
-            container.addChild(node)
+            walls.addChild(node)
         }
+        walls.alpha = wallAlpha(for: chunk)
+        container.addChild(walls)
 
+        // Los faroles quedan POR ENCIMA del velo: un farol es una luz, y en la
+        // oscuridad las luces son justo lo que sí se ve. Además es lo que hace la
+        // zona a ciegas jugable en vez de imposible — sin asideros visibles no
+        // habría forma de columpiarse.
+        let lanterns = SKNode()
+        lanterns.zPosition = Self.lightZPosition
         for anchor in chunk.anchors {
             let node = SKShapeNode(circleOfRadius: Tuning.World.anchorRadius)
             node.position = anchor.position
@@ -206,10 +343,20 @@ final class GameScene: SKScene {
             node.strokeColor = Palette.lantern
             node.lineWidth = 2
             node.glowWidth = 4
-            container.addChild(node)
+            lanterns.addChild(node)
         }
+        container.addChild(lanterns)
 
         return container
+    }
+
+    private static let wallsNodeName = "walls"
+    private static let lightZPosition: CGFloat = 20
+
+    private func wallAlpha(for chunk: Chunk) -> CGFloat {
+        guard chunk.isBlind else { return 1 }
+        let hidden = assistedMode ? Tuning.BlindZone.assistedOutlineAlpha : 0
+        return lerp(1, hidden, darkness)
     }
 
     private func buildBounds() {

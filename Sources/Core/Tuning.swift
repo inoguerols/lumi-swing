@@ -303,6 +303,14 @@ enum Tuning {
         /// tope, el evento gana y ese pulso de proximidad se OMITE (no se atenúa:
         /// atenuarlo rompería la lectura del ritmo, que es la información).
         static let maxSimultaneousIntensity: CGFloat = 1.3
+
+        /// Cada cuántos puntos de movimiento se le vuelve a hablar al motor. A
+        /// 120 fps, una actualización por frame son 120 tareas por segundo cruzando
+        /// la frontera del actor para decir prácticamente lo mismo. Con estos
+        /// escalones el ritmo sigue siendo continuo al tacto y el motor recibe una
+        /// fracción de los mensajes.
+        static let proximityUpdateQuantum: CGFloat = 20
+        static let alignmentUpdateQuantum: CGFloat = 15
     }
 
     // MARK: - Audio (refuerzo, y sustituto donde no hay Taptic)
@@ -338,6 +346,9 @@ enum Tuning {
         /// Desplazamientos respecto al centro de la cámara.
         static let scoreOffsetY: CGFloat = 760
         static let deathOffsetY: CGFloat = -160
+        static let blindNoticeOffsetY: CGFloat = 420
+        /// Cuánto dura el cartel que explica las zonas a ciegas la primera vez.
+        static let blindNoticeDuration: CGFloat = 2.2
     }
 
     // MARK: - Game feel

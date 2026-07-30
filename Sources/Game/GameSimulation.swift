@@ -9,6 +9,8 @@ enum GameEvent: Sendable, Equatable {
     /// Cuántos puntos sumó ese muro: 1, o el doble si era a ciegas.
     case scored(Int)
     case died(ObstacleKind)
+    case enteredBlindZone
+    case exitedBlindZone
 }
 
 /// Orquestador puro. No sabe que existen SpriteKit ni Core Haptics: avanza y
@@ -26,6 +28,7 @@ struct GameSimulation: Sendable {
     private var wasHolding = false
     /// Los muros se cruzan en orden, así que basta con recordar el último puntuado.
     private var lastScoredWall = 0
+    private var wasBlind = false
 
     init(seed: UInt64) {
         self.seed = seed
@@ -34,6 +37,32 @@ struct GameSimulation: Sendable {
     }
 
     var anchors: [Anchor] { chunks.flatMap(\.anchors) }
+
+    /// El muro que el jugador tiene delante. Es el que define todo lo que pasa a
+    /// ciegas: la distancia que marca el ritmo y el hueco que marca la alineación.
+    var nextChunk: Chunk? {
+        chunks.first { $0.wall.x > body.position.x }
+    }
+
+    var isBlind: Bool { nextChunk?.isBlind ?? false }
+
+    /// Distancia horizontal al muro siguiente, o `nil` si no hay ninguno delante.
+    var distanceToNextWall: CGFloat? {
+        nextChunk.map { $0.wall.x - body.position.x }
+    }
+
+    /// Cuánto le sobra al farolillo para pasar por el hueco siguiente. Negativo
+    /// significa que, tal y como va, no cabe.
+    var clearanceAtNextWall: CGFloat? {
+        nextChunk.map { ProximityMapping.clearance(playerY: body.position.y, wall: $0.wall) }
+    }
+
+    /// Coloca el farolillo sin tocar nada más. Existe para los tests y para la
+    /// depuración: permite examinar un tramo concreto del mundo sin tener que
+    /// llegar hasta él jugando.
+    mutating func placeBody(at position: CGPoint) {
+        body.position = position
+    }
 
     mutating func reset(seed: UInt64) {
         self.seed = seed
@@ -44,6 +73,7 @@ struct GameSimulation: Sendable {
         lastScoredWall = 0
         score = 0
         isDead = false
+        wasBlind = false
         refillChunks()
     }
 
@@ -72,6 +102,15 @@ struct GameSimulation: Sendable {
 
         events.append(contentsOf: collectScore())
         refillChunks()
+
+        // La frontera de la zona se anuncia después de puntuar y regenerar, para que
+        // `nextChunk` ya sea el muro que el jugador tiene realmente delante.
+        let blindNow = isBlind
+        if blindNow != wasBlind {
+            events.append(blindNow ? .enteredBlindZone : .exitedBlindZone)
+            wasBlind = blindNow
+        }
+
         return events
     }
 
@@ -100,6 +139,18 @@ struct GameSimulation: Sendable {
         chunks.removeAll { chunk in
             chunk.wall.x < body.position.x - DifficultyCurve.spacing(forWall: chunk.index)
         }
+
+        // Si el jugador se ha puesto por delante de todo el mundo materializado, el
+        // índice salta hasta alcanzarlo: seguir generando muros que ya quedaron atrás
+        // dejaría la ventana permanentemente a su espalda. El bucle termina siempre
+        // porque `wallX` crece al menos `spacingFloor` por muro.
+        if !chunks.contains(where: { $0.wall.x > body.position.x }) {
+            chunks.removeAll()
+            while DifficultyCurve.wallX(forWall: nextChunkIndex) <= body.position.x {
+                nextChunkIndex += 1
+            }
+        }
+
         while chunks.count < Tuning.WorldGen.liveChunkCount {
             chunks.append(WorldGenerator.chunk(index: nextChunkIndex, seed: seed))
             nextChunkIndex += 1

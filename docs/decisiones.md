@@ -155,4 +155,36 @@ La alineación **sí** usa un advanced player con `loopEnabled` y `sendParameter
 
 El motor háptico está implementado, aislado tras el protocolo, con mock, con manejo de reset e interrupciones, y con 10 tests que atan el código a la tabla del documento (incluido uno que compara los siete valores de la tabla §2 uno a uno).
 
+## 2026-07-30 · D-014 · A ciegas se apagan los muros, no las luces
+
+**Decisión:** en zona a ciegas desaparecen los muros, pero los faroles y el propio farolillo siguen viéndose: se dibujan por encima del velo oscuro.
+
+**Por qué:** temáticamente es lo coherente — un farol es una luz, y una luz es justo lo que sí se ve en la oscuridad. Y en jugabilidad es lo que hace la zona posible en vez de imposible: sin asideros visibles el jugador no puede columpiarse y quedaría flotando a oscuras esperando la muerte. Lo que se le quita es la información sobre *dónde está el hueco*, que es exactamente lo que los hápticos vienen a sustituir. Quitarle también los asideros no sería más difícil: sería otro juego.
+
+**Descartado:** oscurecerlo todo (injugable); dejar los muros con contorno tenue siempre (anula la mecánica — eso es el modo asistido de quien no tiene Taptic Engine).
+
+---
+
+## 2026-07-30 · D-015 · La ventana de chunks sigue al jugador, no a un contador
+
+**Decisión:** si el jugador queda por delante de todo el mundo materializado, el índice de generación salta hasta alcanzarlo en vez de seguir emitiendo muros consecutivos.
+
+**Por qué:** lo destapó un test de S4 al colocar el farolillo lejos. La versión anterior generaba siempre "los cuatro siguientes por índice", así que un salto grande dejaba la ventana permanentemente a la espalda del jugador: `nextChunk` devolvía `nil`, no había proximidad que sentir y las zonas a ciegas no se anunciaban nunca. En juego normal no ocurre —nadie avanza 3.000 pt en un frame—, pero era una fragilidad real disfrazada de invariante.
+
+---
+
+## 2026-07-30 · D-016 · La prueba de aceptación a ciegas se hace dentro de la zona
+
+**Decisión:** el test que demuestra que una zona a ciegas es superable coloca al agente a la entrada de la primera zona, en vez de exigirle llegar vivo hasta el muro 11.
+
+**Por qué:** la primera versión pedía las dos cosas a la vez y medía la equivocada. Un agente guiado por hápticos llegaba a 2 puntos de 11 — no porque el idioma háptico fallara, sino porque una política aleatoria no sobrevive diez muros seguidos: la probabilidad decae exponencialmente, y el resultado hablaba de habilidad general con el péndulo, no de la mecánica firma. Colocado a la entrada de la zona, el test responde la pregunta del slice — *¿basta el ritmo y la textura para cruzar un muro invisible?* — y la respuesta es sí, con 400 políticas por mundo.
+
+El agente de ese test no ve la geometría: recibe exactamente lo mismo que un dedo.
+
+**Y un fallo del test, no del juego:** colocaba el farolillo en `wallX + 1`, es decir *dentro* del muro (grosor 46, radio 26). Moría en el primer frame y todos los eventos posteriores eran silencio. Corregido con un margen calculado a partir de las constantes en vez de un número inventado.
+
+---
+
+## 2026-07-30 · S3 completado — lo que sigue sin poder validarse aquí
+
 Lo que **no** se puede verificar en este entorno: cómo se sienten. El simulador no tiene Taptic Engine — `supportsHaptics` devuelve `false` y todo cae al sustituto de audio. La pantalla de debug (cinco toques en la esquina superior izquierda) existe precisamente para eso: es el instrumento con el que hay que sentarse con el iPhone y ajustar. Hasta entonces, los valores de `Tuning.Haptics` son un diseño razonado, no una medición.
