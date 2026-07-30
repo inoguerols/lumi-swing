@@ -34,6 +34,14 @@ final class GameScene: SKScene {
     private var proximityBucket: Int?
     private var alignmentBucket: Int?
 
+    private var trailNodes: [SKShapeNode] = []
+    private var trailPositions: [CGPoint] = []
+    private var trailTimer: CGFloat = 0
+    private var shakeRemaining: CGFloat = 0
+    private var shakeRng = SplitMix64(seed: 0x5EED)
+    /// Posición de cámara sin el temblor sumado.
+    private var cameraBase = CGPoint.zero
+
     init(size: CGSize, haptics: any HapticsEngine) {
         self.haptics = haptics
         super.init(size: size)
@@ -70,11 +78,14 @@ final class GameScene: SKScene {
         ropeNode.zPosition = Self.lightZPosition - 1
         worldNode.addChild(playerNode)
 
+        buildTrail()
+
         buildHUD()
 
         syncWorld()
         // El primer frame coloca la cámara sin interpolar: si no, entra volando.
-        cameraNode.position = CameraController.target(for: simulation.body.position)
+        cameraBase = CameraController.target(for: simulation.body.position)
+        cameraNode.position = cameraBase
 
         let haptics = self.haptics
         Task {
@@ -136,8 +147,10 @@ final class GameScene: SKScene {
                 emit(.score)
             case .died:
                 deathLabel.isHidden = false
+                shakeRemaining = Tuning.Camera.deathShakeDuration
                 emit(.death)
             case .grabbed:
+                squashOnGrab()
                 emit(.grab)
             case .released:
                 emit(.release)
@@ -155,12 +168,22 @@ final class GameScene: SKScene {
         }
 
         updateDarkness(dt: dt)
+        updateSky()
+        updateTrail(dt: dt)
         feedHapticMap()
         syncWorld()
-        cameraNode.position = CameraController.smoothed(
-            current: cameraNode.position,
+
+        // La sacudida se suma encima de la posición base y NO se realimenta: si el
+        // suavizado leyera la posición ya temblada, el temblor se perseguiría a sí
+        // mismo y la cámara acabaría a la deriva.
+        cameraBase = CameraController.smoothed(
+            current: cameraBase,
             target: CameraController.target(for: simulation.body.position),
             dt: dt)
+
+        shakeRemaining = max(0, shakeRemaining - dt)
+        let shake = Effects.shakeOffset(remaining: shakeRemaining, rng: &shakeRng)
+        cameraNode.position = CGPoint(x: cameraBase.x + shake.x, y: cameraBase.y + shake.y)
     }
 
     // MARK: - Input (uno solo: pulsado o no)
@@ -193,11 +216,77 @@ final class GameScene: SKScene {
         darknessNode.alpha = 0
         proximityBucket = nil
         alignmentBucket = nil
+        shakeRemaining = 0
+        trailPositions.removeAll()
+        trailTimer = 0
+        playerNode.removeAllActions()
+        playerNode.xScale = 1
+        playerNode.yScale = 1
         let haptics = self.haptics
         Task { await haptics.stopContinuous() }
 
         syncWorld()
-        cameraNode.position = CameraController.target(for: simulation.body.position)
+        cameraBase = CameraController.target(for: simulation.body.position)
+        cameraNode.position = cameraBase
+    }
+
+    // MARK: - Game feel
+
+    /// Estela: nodos reutilizados que se recolocan sobre posiciones pasadas. Un
+    /// `SKEmitterNode` daría más humo, pero también un rastro que no sigue
+    /// exactamente el arco — y aquí el arco es la información.
+    private func buildTrail() {
+        for index in 0..<Tuning.Feel.trailNodeCount {
+            let node = SKShapeNode(circleOfRadius: Effects.trailRadius(index: index))
+            node.fillColor = Palette.lantern
+            node.strokeColor = .clear
+            // Aditivo: un ámbar translúcido sobre un fondo oscuro *oscurece*, y la
+            // estela salía marrón sucia. Sumando luz, la estela brilla, que es lo
+            // que hace un farolillo al moverse.
+            node.blendMode = .add
+            node.alpha = 0
+            node.zPosition = Self.lightZPosition - 2
+            worldNode.addChild(node)
+            trailNodes.append(node)
+        }
+    }
+
+    private func updateTrail(dt: CGFloat) {
+        trailTimer -= dt
+        if trailTimer <= 0 {
+            trailTimer = Effects.trailSampleInterval
+            trailPositions.insert(simulation.body.position, at: 0)
+            if trailPositions.count > trailNodes.count { trailPositions.removeLast() }
+        }
+
+        for (index, node) in trailNodes.enumerated() {
+            guard index < trailPositions.count else {
+                node.alpha = 0
+                continue
+            }
+            node.position = trailPositions[index]
+            node.alpha = Effects.trailAlpha(index: index)
+        }
+    }
+
+    /// Squash & stretch al agarrarse: el farolillo se estira en vertical y vuelve.
+    /// Sin esto el agarre es un cambio de estado invisible; con esto es un tirón.
+    private func squashOnGrab() {
+        playerNode.removeAllActions()
+        playerNode.xScale = 1
+        playerNode.yScale = 1
+        let total = TimeInterval(Tuning.Feel.squashDuration)
+        playerNode.run(.sequence([
+            .scaleX(to: 1 / Tuning.Feel.squashScale,
+                    y: Tuning.Feel.squashScale,
+                    duration: total * 0.35),
+            .scale(to: 1, duration: total * 0.65)
+        ]))
+    }
+
+    private func updateSky() {
+        guard let wall = simulation.nextChunk?.index else { return }
+        backgroundColor = Palette.sky(at: Effects.skyPhase(forWall: wall))
     }
 
     // MARK: - Zonas a ciegas

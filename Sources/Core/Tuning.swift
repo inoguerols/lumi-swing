@@ -354,10 +354,23 @@ enum Tuning {
     // MARK: - Game feel
 
     enum Feel {
+        /// Al agarrarse, el farolillo se estira en la dirección del tirón y vuelve.
+        /// Es lo que convierte un cambio de estado en un golpe de masa.
         static let squashScale: CGFloat = 1.18
         static let squashDuration: CGFloat = 0.12
+
         static let trailNodeCount: Int = 14
         static let trailFadeDuration: CGFloat = 0.35
+        /// Opacidad de la primera marca de estela. Por encima de ~0,45 la estela
+        /// compite con el farolillo y deja de leerse quién es quién.
+        static let trailPeakAlpha: CGFloat = 0.32
+        /// Cuánto se estrecha la estela hacia el final.
+        static let trailTailScale: CGFloat = 0.25
+
+        /// Cada cuántos muros completa el cielo un ciclo entero. 24 es algo más que
+        /// una partida buena: el jugador nota que el mundo respira, pero no ve el
+        /// bucle repetirse dentro de un mismo run.
+        static let paletteCycleWalls: Int = 24
         static let paletteTransitionDuration: CGFloat = 1.2
 
         /// Presupuesto del brief: del toque al nuevo run. Se mide, no se supone.
