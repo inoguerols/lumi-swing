@@ -51,7 +51,7 @@ struct RootView: View {
                 MenuView(settings: settings,
                          onPlay: startRun,
                          onSettings: { showingSettings = true },
-                         onLeaderboard: GameCenter.showLeaderboard,
+                         onLeaderboard: { GameCenter.show(.week) },
                          onSecretDebug: { showingDebug = true })
                     .transition(.opacity)
 
@@ -64,7 +64,7 @@ struct RootView: View {
                              isNewRecord: model.isNewRecord,
                              onRetry: startRun,
                              onMenu: showMenu,
-                             onLeaderboard: GameCenter.showLeaderboard)
+                             onLeaderboard: { GameCenter.show(.week) })
                     .transition(.opacity)
             }
         }

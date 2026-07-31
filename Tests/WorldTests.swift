@@ -80,20 +80,29 @@ struct WorldTests {
                 : Tuning.Player.startX
 
             #expect(!chunk.anchors.isEmpty)
-            // La invariante que de verdad importa: desde CUALQUIER farol del chunk,
-            // colgando, se llega a la altura del hueco. Antes las anclas se sorteaban
-            // por su cuenta y el 45 % de los huecos era inalcanzable balanceándose.
+
+            // La invariante que de verdad importa: la PRIMERA flor es la llave, y
+            // colgando de ella se llega a la altura del hueco. La segunda es un
+            // escalón para alcanzarla y va a media altura entre puertas, así que no
+            // tiene esa obligación — de hecho no debe tenerla: cuando la tenía, los
+            // saltos grandes de hueco la dejaban fuera del radio de agarre y el tramo
+            // entero se volvía imposible.
             let reachable = WorldGenerator.anchorHeightRange(forGapCenterY: chunk.wall.gapCenterY)
+            let key = chunk.anchors[0]
+            #expect(key.position.y >= reachable.lowerBound - 0.001)
+            #expect(key.position.y <= reachable.upperBound + 0.001)
+
             for anchor in chunk.anchors {
-                #expect(anchor.position.y >= reachable.lowerBound - 0.001)
-                #expect(anchor.position.y <= reachable.upperBound + 0.001)
                 #expect(anchor.position.y <= Tuning.World.ceilingY)
                 #expect(anchor.position.x >= previousWallX + Tuning.WorldGen.anchorWallClearance - 0.001)
                 #expect(anchor.position.x <= chunk.wall.x - Tuning.WorldGen.anchorWallClearance + 0.001)
             }
             if chunk.anchors.count == 2 {
+                // Puede apretarse cuando el tramo viene justo: dos flores juntas son
+                // mejor que una sola, porque sin escalón el tramo puede ser
+                // imposible.
                 let separation = abs(chunk.anchors[1].position.x - chunk.anchors[0].position.x)
-                #expect(separation >= Tuning.WorldGen.anchorMinSeparationX - 0.001)
+                #expect(separation >= Tuning.WorldGen.anchorMinSeparationTight - 0.001)
             }
         }
     }

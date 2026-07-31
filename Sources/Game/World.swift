@@ -89,6 +89,7 @@ enum WorldGenerator {
                                       wallX: wallX,
                                       gapCenterY: center,
                                       gapHeight: gapHeight,
+                                      seed: seed,
                                       rng: &rng),
                      isBlind: isBlind)
     }
@@ -203,6 +204,7 @@ enum WorldGenerator {
                                 wallX: CGFloat,
                                 gapCenterY: CGFloat,
                                 gapHeight: CGFloat,
+                                seed: UInt64,
                                 rng: inout SplitMix64) -> [Anchor] {
         let previousWallX = index > 1
             ? DifficultyCurve.wallX(forWall: index - 1)
@@ -232,21 +234,39 @@ enum WorldGenerator {
         }
         let key = Anchor(position: CGPoint(x: keyX, y: keyY))
 
-        var wantsSecond = index < Tuning.WorldGen.singleAnchorFromWall
-            || rng.nextCGFloat(in: 0...1) >= Tuning.WorldGen.singleAnchorChance
-        if index == 1 { wantsSecond = true }
-        guard wantsSecond else { return [key] }
-
         // LA DE PASO: sirve para encadenar hasta la llave, no para cruzar. Va tan
         // atrás que su propio arco ni siquiera alcanza el muro — si quedara a media
         // distancia, columpiarse desde ella acabaría estampándote contra la parte
         // maciza sin que el jugador pudiera hacer nada por evitarlo.
+        //
+        // Y **siempre** está. Antes había una variante de un solo asidero que parecía
+        // dificultad y era otra cosa: tras arreglar la geometría, los únicos tramos
+        // que seguían siendo imposibles eran exactamente los que se quedaban sin
+        // escalón. Si no cabe con la separación holgada, se aprieta la separación
+        // antes que renunciar a ella.
         let outOfReachOfWall = wallX - Tuning.Pendulum.ropeLength - Tuning.Player.radius
-        let secondUpper = min(keyX - Tuning.WorldGen.anchorMinSeparationX, outOfReachOfWall)
+        let room = min(keyX, outOfReachOfWall) - lower
+        let separation = min(Tuning.WorldGen.anchorMinSeparationX,
+                             max(Tuning.WorldGen.anchorMinSeparationTight, room))
+        let secondUpper = min(keyX - separation, outOfReachOfWall)
         guard secondUpper > lower else { return [key] }
 
+        // Y va a **media altura entre las dos puertas**, no a la altura de la
+        // siguiente. Es un escalón: si estuviera arriba del todo como la llave, un
+        // salto grande de hueco la dejaría fuera del radio de agarre desde donde
+        // acabas de entrar, y el tramo entero se volvería imposible.
+        // Cualificado, porque el parámetro `gapCenterY` sombrea a la función.
+        let previousGap = index > 1
+            ? WorldGenerator.gapCenterY(forWall: index - 1, seed: seed)
+            : Tuning.Player.startY
+        let stepHeight = (previousGap + gapCenterY) / 2 + Tuning.Pendulum.ropeLength
+        let jitter = Tuning.WorldGen.anchorHeightJitter
+        let stepY = clamp(rng.nextCGFloat(in: (stepHeight - jitter)...(stepHeight + jitter)),
+                          Tuning.World.floorY + Tuning.Pendulum.ropeLength,
+                          Tuning.World.ceilingY - Tuning.WorldGen.anchorCeilingMargin)
+
         let second = Anchor(position: CGPoint(x: rng.nextCGFloat(in: lower...secondUpper),
-                                              y: rng.nextCGFloat(in: yRange)))
+                                              y: stepY))
         return [key, second]
     }
 }

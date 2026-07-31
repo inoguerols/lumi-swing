@@ -84,7 +84,13 @@ enum Tuning {
         /// Con L=320 y g=2000 el periodo es 2,5 s: ~1,26 s por medio arco, del orden
         /// de lo que cuesta cruzar un chunk. Ese encaje entre el ritmo del péndulo y
         /// el del mundo es lo que hace el juego cadencioso en vez de frenético.
-        static let ropeLength: CGFloat = 320
+        /// Bajada de 320 a 240 por una razón de cadena, no de gusto: la flor va una
+        /// liana por encima del hueco, así que cuanto más larga sea la liana, más
+        /// arriba queda la flor respecto a por donde acabas de pasar. Con 320 y un
+        /// salto de hueco de 320, la flor quedaba a 640 pt del punto de entrada y el
+        /// radio de agarre son 430: no había nada a lo que agarrarse, y 11 de cada
+        /// 40 puertas eran literalmente imposibles.
+        static let ropeLength: CGFloat = 240
 
         /// Al engancharse, la liana mide **lo que hay** hasta la flor (acotado a este
         /// rango) y luego se recoge sola hasta `ropeLength`.
@@ -224,7 +230,11 @@ enum Tuning {
         /// verticales de hasta 929 pt entre muros consecutivos, cuando el techo de
         /// subida del farolillo ronda los 560: había tramos imposibles, no difíciles.
         /// El mundo pasa a ser una **cadena**, no una lista de sorteos sueltos.
-        static let maxGapStep: CGFloat = 320
+        /// Bajado de 320 a 220: el salto entre huecos se suma a la altura de la flor
+        /// (una liana por encima del hueco), y la suma tiene que caber dentro del
+        /// radio de agarre desde el punto de entrada. Es la otra mitad del arreglo
+        /// de las puertas imposibles.
+        static let maxGapStep: CGFloat = 220
 
         /// Franja histórica de altura de las anclas. Ya NO decide dónde van —eso lo
         /// decide el hueco—; se conserva como referencia del espacio de juego.
@@ -259,6 +269,9 @@ enum Tuning {
         /// Si subes cualquiera de las dos, los chunks tardíos se quedarán con una
         /// sola ancla sin que nadie lo haya decidido.
         static let anchorMinSeparationX: CGFloat = 200
+        /// Separación de emergencia cuando el tramo viene justo. Preferimos dos
+        /// flores apretadas a una sola: sin escalón, el tramo puede ser imposible.
+        static let anchorMinSeparationTight: CGFloat = 90
         static let anchorWallClearance: CGFloat = 110
 
         /// A qué distancia máxima del muro puede estar la flor que da acceso a él.

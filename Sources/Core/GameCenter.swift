@@ -11,6 +11,30 @@ enum GameCenter {
 
     static let leaderboardID = "pendulo.highscore"
 
+    /// Las tres vistas del ranking, en el idioma del juego y no en el de GameKit:
+    /// así la interfaz no tiene que importar GameKit para hablar de clasificaciones.
+    enum Scope: String, CaseIterable, Identifiable {
+        case week, allTime, friends
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .week: "Semana"
+            case .allTime: "Histórico"
+            case .friends: "Amigos"
+            }
+        }
+    }
+
+    static func show(_ scope: Scope) {
+        switch scope {
+        case .week: showLeaderboard(timeScope: .week, playerScope: .global)
+        case .allTime: showLeaderboard(timeScope: .allTime, playerScope: .global)
+        case .friends: showLeaderboard(timeScope: .allTime, playerScope: .friendsOnly)
+        }
+    }
+
     private(set) static var isAuthenticated = false
 
     /// Se llama una vez al arrancar. La pantalla de inicio de sesión la presenta el
@@ -26,12 +50,18 @@ enum GameCenter {
     /// La presenta UIKit directamente y no SwiftUI porque `GKGameCenterViewController`
     /// trae su propia navegación y su propio botón de cerrar: envolverlo en un
     /// `sheet` daría dos barras y dos formas de salir.
-    static func showLeaderboard() {
+    /// Apple mantiene gratis, sobre la misma leaderboard, un ranking de hoy, uno de
+    /// la semana y el histórico. En un juego de «una vez más» el semanal importa más
+    /// que el histórico: en el de siempre están los diez de siempre y nadie más se
+    /// molesta en competir, mientras que el semanal se resetea y todo el mundo tiene
+    /// una oportunidad cada lunes. Por eso es el que se abre por defecto.
+    static func showLeaderboard(timeScope: GKLeaderboard.TimeScope = .week,
+                                playerScope: GKLeaderboard.PlayerScope = .global) {
         guard isAuthenticated else { return }
 
         let controller = GKGameCenterViewController(leaderboardID: leaderboardID,
-                                                    playerScope: .global,
-                                                    timeScope: .allTime)
+                                                    playerScope: playerScope,
+                                                    timeScope: timeScope)
         controller.gameCenterDelegate = delegate
 
         guard let root = UIApplication.shared.connectedScenes

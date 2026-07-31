@@ -186,6 +186,87 @@ struct DiagnosticsTests {
         #expect(traps == 0, "\(traps) flores llevan al muro hagas lo que hagas")
     }
 
+    // MARK: - ¿Se puede pasar CADA puerta?
+
+    private static let pastWall =
+        Tuning.World.wallThickness / 2 + Tuning.Player.radius + 60
+
+    /// La prueba de verdad, y la única que no depende de que mi modelo geométrico
+    /// sea correcto: coger cada muro por separado, poner al jugador a la entrada de
+    /// su tramo, y **buscar** si existe alguna secuencia de toques que lo cruce.
+    ///
+    /// Los tests anteriores razonaban sobre el arco con la liana a longitud de
+    /// reposo. Pero la liana se recoge poco a poco y además se estira al tirar, así
+    /// que el arco real no es el que dice la fórmula. Esto no razona: simula.
+    @Test("Cada puerta se puede cruzar de alguna manera")
+    func everyDoorIsPassable() {
+        var impossible: [Int] = []
+        var report: [String] = []
+
+        for wall in 1...40 {
+            var passed = false
+
+            // Se entra por donde se habría cruzado el muro anterior, a la altura de
+            // su hueco: la situación real de quien viene jugando.
+            let entryX = wall > 1
+                ? DifficultyCurve.wallX(forWall: wall - 1) + Self.pastWall
+                : Tuning.Player.startX
+            let entryY = wall > 1
+                ? WorldGenerator.gapCenterY(forWall: wall - 1, seed: 7)
+                : Tuning.Player.startY
+
+            for attempt in UInt64(0)..<600 where !passed {
+                var simulation = GameSimulation(seed: 7)
+                simulation.placeBody(at: CGPoint(x: entryX, y: entryY))
+
+                var rng = SplitMix64(seed: UInt64(wall) &* 7919 &+ attempt)
+                let step: CGFloat = 1.0 / 120
+                var holding = false
+                var untilDecision: CGFloat = 0
+                var elapsed: CGFloat = 0
+                let targetX = DifficultyCurve.wallX(forWall: wall)
+
+                while !simulation.isDead && elapsed < 12 {
+                    if untilDecision <= 0 {
+                        holding = rng.nextCGFloat(in: 0...1) < 0.55
+                        untilDecision = rng.nextCGFloat(in: 0.04...0.30)
+                    }
+                    _ = simulation.advance(dt: step, holding: holding)
+                    elapsed += step
+                    untilDecision -= step
+
+                    if simulation.body.position.x > targetX + Tuning.Player.radius {
+                        passed = true
+                        break
+                    }
+                }
+            }
+
+            if !passed {
+                impossible.append(wall)
+                if report.count < 6 {
+                    let chunk = WorldGenerator.chunk(index: wall, seed: 7)
+                    let flowers = chunk.anchors.map {
+                        "(\(Int(chunk.wall.x - $0.position.x)) pt del muro, y=\(Int($0.position.y)))"
+                    }
+                    report.append("muro \(wall): hueco \(Int(chunk.wall.gapCenterY)) "
+                                  + "±\(Int(chunk.wall.gapHeight / 2)) · flores \(flowers.joined(separator: " "))")
+                }
+            }
+        }
+
+        print("""
+
+        ┌─ PUERTAS IMPOSIBLES (600 intentos cada una) ────────────────
+        │ Imposibles: \(impossible.count) de 40 → \(impossible.map(String.init).joined(separator: ", "))
+        \(report.map { "│   \($0)" }.joined(separator: "\n"))
+        └──────────────────────────────────────────────────────────────
+
+        """)
+
+        #expect(impossible.isEmpty, "Puertas que no se pueden cruzar: \(impossible)")
+    }
+
     // MARK: - ¿Se puede jugar bien?
 
     /// Un bot que **sabe** el gesto que el juego pide: agárrate al farol de delante,

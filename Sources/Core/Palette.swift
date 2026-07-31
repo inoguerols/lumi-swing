@@ -13,13 +13,17 @@ enum Palette {
 
     /// Los dos extremos del ciclo. Ambos son noche cerrada: el juego va de una luz
     /// pequeña en un sitio muy oscuro, y un cielo claro apagaría al personaje.
-    static let night = SKColor(red: 0.04, green: 0.09, blue: 0.08, alpha: 1)
-    static let deepNight = SKColor(red: 0.02, green: 0.05, blue: 0.05, alpha: 1)
+    /// Aclarados respecto a la primera versión: seguía siendo noche, pero tan cerrada
+    /// que la selva no se veía y la pantalla parecía apagada. Sigue siendo de noche
+    /// —lo exige la mecánica— con luz suficiente para que haya un mundo alrededor del
+    /// jugador y no un vacío negro.
+    static let night = SKColor(red: 0.07, green: 0.15, blue: 0.14, alpha: 1)
+    static let deepNight = SKColor(red: 0.04, green: 0.10, blue: 0.10, alpha: 1)
 
     /// Las dos capas de vegetación del fondo. La lejana casi se confunde con el
     /// cielo; la cercana recorta contra él. Esa diferencia es la profundidad.
-    static let canopyFar = SKColor(red: 0.05, green: 0.12, blue: 0.11, alpha: 1)
-    static let canopyNear = SKColor(red: 0.03, green: 0.08, blue: 0.08, alpha: 1)
+    static let canopyFar = SKColor(red: 0.10, green: 0.22, blue: 0.19, alpha: 1)
+    static let canopyNear = SKColor(red: 0.05, green: 0.13, blue: 0.12, alpha: 1)
     /// Polvo luminoso lejano: no informa de nada, solo dice que el aire existe.
     static let pollen = SKColor(red: 0.60, green: 0.95, blue: 0.70, alpha: 1)
 
