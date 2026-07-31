@@ -149,8 +149,33 @@ final class GameScene: SKScene {
         cameraNode.addChild(canopyFarNode)
         cameraNode.addChild(canopyNearNode)
 
+        buildMoon(height: height)
         buildPollen(width: width, height: height)
         cameraNode.addChild(pollenNode)
+    }
+
+    /// La luna, arriba y fija respecto a la cámara: está tan lejos que no tiene
+    /// parallax. Es la fuente de la luz de toda la escena — sin ella el cielo era un
+    /// verde plano sin causa.
+    private func buildMoon(height: CGFloat) {
+        let halo = SKShapeNode(circleOfRadius: Tuning.Scenery.moonRadius * 3.2)
+        halo.fillColor = Palette.moonHalo
+        halo.strokeColor = .clear
+        halo.blendMode = .add
+        halo.alpha = 0.5
+
+        let disc = SKShapeNode(circleOfRadius: Tuning.Scenery.moonRadius)
+        disc.fillColor = Palette.moon
+        disc.strokeColor = .clear
+        disc.glowWidth = Tuning.Scenery.moonRadius * 0.6
+
+        let moon = SKNode()
+        moon.addChild(halo)
+        moon.addChild(disc)
+        moon.position = CGPoint(x: Tuning.World.sceneWidth * 0.30,
+                                y: height * 0.5 - Tuning.Scenery.moonRadius * 3)
+        moon.zPosition = -95
+        cameraNode.addChild(moon)
     }
 
     /// Dos copias de la silueta, una al lado de otra: al desplazarse por parallax

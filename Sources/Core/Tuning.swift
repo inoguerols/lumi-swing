@@ -442,6 +442,8 @@ enum Tuning {
 
         /// Motas de polen suspendidas. Suficientes para que el aire exista, pocas
         /// para no competir con las luces que sí informan.
+        static let moonRadius: CGFloat = 62
+
         static let pollenCount: Int = 22
         static let pollenRadius: CGFloat = 4
         static let pollenDriftDuration: CGFloat = 6

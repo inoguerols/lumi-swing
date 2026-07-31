@@ -46,6 +46,14 @@ struct RootView: View {
             SpriteView(scene: scene, preferredFramesPerSecond: 120)
                 .ignoresSafeArea()
 
+            // El enjambre solo fuera de la partida: durante el juego competiría con
+            // las luces que sí informan, y a ciegas sería directamente ruido.
+            if model.phase != .playing {
+                FireflySwarm(count: 18)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
+
             switch model.phase {
             case .menu:
                 MenuView(settings: settings,

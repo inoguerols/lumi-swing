@@ -26,23 +26,80 @@ private struct Card<Content: View>: View {
             .padding(.vertical, 36)
             .padding(.horizontal, 32)
             .background {
-                RoundedRectangle(cornerRadius: 32)
-                    .fill(.ultraThinMaterial)
+                // Panel **pintado**, no `.ultraThinMaterial`. El material del sistema
+                // se lee como una hoja de ajustes de iOS puesta encima del juego: es
+                // exactamente lo que hacía que la interfaz pareciera "demasiado
+                // nativa". Un verde de selva con su propio degradado pertenece al
+                // mundo del juego.
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [Color(red: 0.13, green: 0.27, blue: 0.24).opacity(0.97),
+                                 Color(red: 0.06, green: 0.15, blue: 0.14).opacity(0.97)],
+                        startPoint: .top,
+                        endPoint: .bottom))
                     .overlay {
-                        // Resplandor cálido detrás del contenido, como si la
-                        // luciérnaga iluminara la tarjeta desde dentro.
-                        RadialGradient(colors: [fireflyAmber.opacity(0.16), .clear],
+                        // Resplandor cálido arriba, como si la luciérnaga iluminara
+                        // el panel desde fuera.
+                        RadialGradient(colors: [fireflyAmber.opacity(0.22), .clear],
                                        center: .top,
                                        startRadius: 0,
-                                       endRadius: 320)
+                                       endRadius: 380)
                     }
                     .overlay {
-                        RoundedRectangle(cornerRadius: 32)
-                            .strokeBorder(fireflyAmber.opacity(0.30), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 34, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(colors: [fireflyAmber.opacity(0.55),
+                                                        flowerCyan.opacity(0.25)],
+                                               startPoint: .topLeading,
+                                               endPoint: .bottomTrailing),
+                                lineWidth: 2)
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
             }
-            .shadow(color: .black.opacity(0.55), radius: 30, y: 12)
+            .shadow(color: .black.opacity(0.6), radius: 34, y: 14)
             .padding(.horizontal, 24)
+    }
+}
+
+/// Luciérnagas sueltas revoloteando por el menú. Es lo que separa una pantalla de
+/// título de una pantalla de ajustes: el mundo del juego sigue vivo detrás aunque
+/// no estés jugando.
+///
+/// Se dibujan en un único `Canvas` y no como vistas: son decenas de puntos que se
+/// mueven cada frame, y treinta vistas de SwiftUI animándose costarían mucho más
+/// que treinta círculos pintados de una vez.
+struct FireflySwarm: View {
+    let count: Int
+
+    var body: some View {
+        TimelineView(.animation) { context in
+            Canvas { drawing, size in
+                let time = context.date.timeIntervalSinceReferenceDate
+
+                for index in 0..<count {
+                    let seed = Double(index)
+                    // Trayectorias de Lissajous con periodos distintos: nunca vuelven
+                    // a coincidir, así que el vuelo no se lee como un bucle.
+                    let x = (sin(time * 0.17 + seed * 1.7) * 0.5 + 0.5) * size.width
+                    let y = (cos(time * 0.13 + seed * 2.3) * 0.5 + 0.5) * size.height
+                    let pulse = sin(time * 1.6 + seed * 3.1) * 0.5 + 0.5
+                    let radius = 2.5 + pulse * 2.5
+
+                    let halo = Path(ellipseIn: CGRect(x: x - radius * 3,
+                                                      y: y - radius * 3,
+                                                      width: radius * 6,
+                                                      height: radius * 6))
+                    drawing.fill(halo, with: .color(fireflyAmber.opacity(0.05 + pulse * 0.08)))
+
+                    let core = Path(ellipseIn: CGRect(x: x - radius,
+                                                      y: y - radius,
+                                                      width: radius * 2,
+                                                      height: radius * 2))
+                    drawing.fill(core, with: .color(fireflyAmber.opacity(0.35 + pulse * 0.5)))
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

@@ -17,13 +17,18 @@ enum Palette {
     /// que la selva no se veía y la pantalla parecía apagada. Sigue siendo de noche
     /// —lo exige la mecánica— con luz suficiente para que haya un mundo alrededor del
     /// jugador y no un vacío negro.
-    static let night = SKColor(red: 0.07, green: 0.15, blue: 0.14, alpha: 1)
-    static let deepNight = SKColor(red: 0.04, green: 0.10, blue: 0.10, alpha: 1)
+    static let night = SKColor(red: 0.12, green: 0.24, blue: 0.22, alpha: 1)
+    static let deepNight = SKColor(red: 0.07, green: 0.17, blue: 0.16, alpha: 1)
 
     /// Las dos capas de vegetación del fondo. La lejana casi se confunde con el
     /// cielo; la cercana recorta contra él. Esa diferencia es la profundidad.
-    static let canopyFar = SKColor(red: 0.10, green: 0.22, blue: 0.19, alpha: 1)
-    static let canopyNear = SKColor(red: 0.05, green: 0.13, blue: 0.12, alpha: 1)
+    static let canopyFar = SKColor(red: 0.17, green: 0.34, blue: 0.29, alpha: 1)
+    static let canopyNear = SKColor(red: 0.09, green: 0.21, blue: 0.19, alpha: 1)
+
+    /// La luna: de dónde viene la luz. Sin ella el verde del cielo era un color
+    /// plano sin causa; con ella hay una fuente, y la escena tiene dirección.
+    static let moon = SKColor(red: 0.88, green: 0.97, blue: 0.92, alpha: 1)
+    static let moonHalo = SKColor(red: 0.55, green: 0.85, blue: 0.78, alpha: 0.30)
     /// Polvo luminoso lejano: no informa de nada, solo dice que el aire existe.
     static let pollen = SKColor(red: 0.60, green: 0.95, blue: 0.70, alpha: 1)
 
