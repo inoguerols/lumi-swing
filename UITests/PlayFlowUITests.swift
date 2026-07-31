@@ -59,7 +59,9 @@ final class PlayFlowUITests: XCTestCase {
 
         XCTAssertTrue(app.switches["Hápticos"].waitForExistence(timeout: 5),
                       "No apareció el ajuste de hápticos")
-        XCTAssertTrue(app.switches["Ver los muros a ciegas"].exists,
+        // Con espera, no `exists` a secas: la hoja de ajustes se presenta animada y
+        // el segundo interruptor puede no estar todavía en la jerarquía.
+        XCTAssertTrue(app.switches["Ver los muros a ciegas"].waitForExistence(timeout: 5),
                       "Falta el modo de accesibilidad para quien no percibe hápticos")
 
         app.buttons["Listo"].tap()

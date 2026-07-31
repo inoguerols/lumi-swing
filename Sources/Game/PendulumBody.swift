@@ -6,7 +6,9 @@ struct PendulumBody: Sendable {
 
     struct Attachment: Sendable, Equatable {
         let anchor: CGPoint
-        let ropeLength: CGFloat
+        /// Cambia con el tiempo: al engancharte mide lo que hay hasta la flor y se va
+        /// recogiendo hasta la longitud de reposo.
+        var ropeLength: CGFloat
     }
 
     var position: CGPoint
@@ -38,10 +40,20 @@ struct PendulumBody: Sendable {
     private mutating func integrate(_ step: CGFloat, holding: Bool) {
         velocity = CGVector(dx: velocity.dx, dy: velocity.dy - Tuning.Pendulum.gravity * step)
 
-        if let attachment {
+        if var attachment {
             if holding { pump(step, attachment: attachment) }
             velocity = velocity * exponentialDecay(rate: Tuning.Pendulum.ropeDrag, dt: step)
             position = position + velocity * step
+
+            // La liana se recoge hacia su longitud de reposo. Lo hace despacio, así
+            // que el enganche conserva el gesto de agarrarse donde estabas y, un
+            // instante después, el arco vuelve a ser el predecible de siempre.
+            attachment.ropeLength = lerp(
+                attachment.ropeLength,
+                Tuning.Pendulum.ropeLength,
+                1 - exponentialDecay(rate: Tuning.Pendulum.ropeRetractRate, dt: step))
+            self.attachment = attachment
+
             applyRopeConstraint(attachment)
         } else {
             velocity = velocity * exponentialDecay(rate: Tuning.Pendulum.airDrag, dt: step)
@@ -86,8 +98,19 @@ struct PendulumBody: Sendable {
         guard distance > attachment.ropeLength, distance > 0 else { return }
 
         let radial = offset * (1 / distance)
-        position = attachment.anchor + radial * attachment.ropeLength
-        velocity = velocity - radial * velocity.dot(radial)
+
+        // La liana **cede**: se deja estirar una fracción del exceso en vez de cortar
+        // el movimiento en seco. Y no mata del todo la velocidad radial, deja un
+        // resto que rebota. Con corrección rígida y cero rebote el agarre se sentía
+        // un cable de acero: exacto, pero muerto.
+        let overshoot = distance - attachment.ropeLength
+        let stretched = attachment.ropeLength + overshoot * Tuning.Pendulum.ropeElasticity
+        position = attachment.anchor + radial * stretched
+
+        let radialSpeed = velocity.dot(radial)
+        if radialSpeed > 0 {
+            velocity = velocity - radial * (radialSpeed * (1 + Tuning.Pendulum.ropeBounce))
+        }
     }
 
     private mutating func clampSpeed() {
@@ -117,10 +140,13 @@ struct PendulumBody: Sendable {
         }
 
         guard let best else { return false }
-        // Longitud fija, no la distancia a la que estabas al pulsar: así el punto más
-        // bajo del arco cae siempre en el hueco y el gesto se puede aprender en vez
-        // de sufrirlo.
-        attachment = Attachment(anchor: best.anchor, ropeLength: Tuning.Pendulum.ropeLength)
+        // La liana nace con la longitud que hay hasta la flor —el enganche conserva
+        // el gesto— y se recoge hacia la de reposo mientras te balanceas, que es la
+        // que hace que el punto bajo del arco caiga en el hueco.
+        attachment = Attachment(anchor: best.anchor,
+                                ropeLength: clamp(best.distance,
+                                                  Tuning.Pendulum.ropeGrabMin,
+                                                  Tuning.Pendulum.ropeGrabMax))
         return true
     }
 

@@ -86,6 +86,27 @@ enum Tuning {
         /// el del mundo es lo que hace el juego cadencioso en vez de frenético.
         static let ropeLength: CGFloat = 320
 
+        /// Al engancharse, la liana mide **lo que hay** hasta la flor (acotado a este
+        /// rango) y luego se recoge sola hasta `ropeLength`.
+        ///
+        /// Que midiera desde el primer instante lo mismo pasara lo que pasara era
+        /// justo, pero se sentía mecánico: siempre el mismo arco, siempre el mismo
+        /// enganche. Así el momento de agarrarse conserva el gesto real —te enganchas
+        /// donde estás— y a los pocos décimas la longitud converge a la predecible,
+        /// que es la que hace que el punto bajo caiga en el hueco.
+        static let ropeGrabMin: CGFloat = 200
+        static let ropeGrabMax: CGFloat = 420
+        /// Con qué prisa se recoge (1/s). Más alto = tirón más seco.
+        static let ropeRetractRate: CGFloat = 2.6
+
+        /// Cuánto cede la liana cuando tira. 0 sería un cable de acero — que es lo
+        /// que se sentía antes. Este poco de elasticidad es lo que la convierte en
+        /// algo vivo que se estira y rebota.
+        static let ropeElasticity: CGFloat = 0.10
+        /// Cuánta velocidad radial sobrevive al tirón. A 0 la cuerda mata el rebote
+        /// de golpe; un resto pequeño devuelve el balanceo natural.
+        static let ropeBounce: CGFloat = 0.25
+
         /// Radio de búsqueda de ancla al pulsar. Igual a la cuerda máxima: si algo
         /// está a distancia agarrable, es agarrable.
         static let grabRadius: CGFloat = 430

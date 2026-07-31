@@ -612,9 +612,21 @@ final class GameScene: SKScene {
         highlightReachableFlowers()
 
         if let attachment = simulation.body.attachment {
+            // La liana cuelga cuando está floja y se tensa al tirar. Una línea recta
+            // constante era la mitad de la sensación de "todo demasiado fijo": una
+            // liana de verdad tiene comba, y esa comba desaparece justo cuando el
+            // tirón manda.
+            let position = simulation.body.position
+            let distance = position.distance(to: attachment.anchor)
+            let slack = max(0, attachment.ropeLength - distance)
+
             let path = CGMutablePath()
             path.move(to: attachment.anchor)
-            path.addLine(to: simulation.body.position)
+            let midpoint = CGPoint(x: (attachment.anchor.x + position.x) / 2,
+                                   y: (attachment.anchor.y + position.y) / 2)
+            path.addQuadCurve(to: position,
+                              control: CGPoint(x: midpoint.x,
+                                               y: midpoint.y - slack * Self.ropeSagFactor))
             ropeNode.path = path
             ropeNode.isHidden = false
         } else {
@@ -732,6 +744,8 @@ final class GameScene: SKScene {
     private static let flowersNodeName = "flowers"
     private static let corollaNodeName = "corolla"
     private static let mossThickness: CGFloat = 10
+    /// Cuánto cuelga la liana por cada punto de holgura.
+    private static let ropeSagFactor: CGFloat = 0.9
     private static let lightZPosition: CGFloat = 20
 
     /// La flor que está al alcance se abre y brilla. Enseña el radio de agarre

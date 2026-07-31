@@ -21,15 +21,35 @@ struct PendulumBodyTests {
         return 0.5 * speed * speed + Tuning.Pendulum.gravity * body.position.y
     }
 
-    @Test("La cuerda nunca se estira más allá de su longitud")
-    func ropeNeverStretches() throws {
+    @Test("La liana se estira, pero solo lo justo")
+    func ropeStretchesWithinItsElasticity() throws {
         var body = attachedBody()
-        let attachment = try #require(body.attachment)
+        let anchor = try #require(body.attachment).anchor
+
+        // La liana cede un poco al tirar: no es un cable de acero. Lo que no puede
+        // hacer es dar de sí sin freno, porque entonces el arco dejaría de ser
+        // predecible y el punto bajo ya no caería en el hueco.
+        let ceiling = Tuning.Pendulum.ropeGrabMax * (1 + Tuning.Pendulum.ropeElasticity) + 1
 
         for _ in 0..<600 {
             body.advance(dt: Tuning.Pendulum.physicsStep, holding: false)
-            #expect(body.position.distance(to: attachment.anchor) <= attachment.ropeLength + 0.5)
+            #expect(body.position.distance(to: anchor) <= ceiling)
         }
+    }
+
+    @Test("La liana se recoge hasta su longitud de reposo")
+    func ropeRetractsToRestLength() throws {
+        // Enganchada larga: debe acabar midiendo lo de siempre, que es lo que hace
+        // que el punto bajo del arco caiga en el hueco.
+        var body = attachedBody(rope: Tuning.Pendulum.ropeGrabMax)
+        #expect(try #require(body.attachment).ropeLength > Tuning.Pendulum.ropeLength)
+
+        for _ in 0..<600 {
+            body.advance(dt: Tuning.Pendulum.physicsStep, holding: false)
+        }
+
+        let settled = try #require(body.attachment).ropeLength
+        #expect(abs(settled - Tuning.Pendulum.ropeLength) < 5)
     }
 
     @Test("Sin bombeo, la energía mecánica nunca crece")
@@ -59,7 +79,11 @@ struct PendulumBodyTests {
 
         let speed = body.velocity.length
         #expect(speed > 0)
-        #expect(abs(body.velocity.dot(radial)) / speed < 0.02)
+        // Casi tangente, no exactamente: la liana cede y rebota, así que queda un
+        // resto radial. Ese resto ES la sensación de liana — con tolerancia cero
+        // estaríamos exigiendo un cable de acero, que es justo lo que se sentía
+        // mecánico. Lo que sí importa es que la salida siga dominada por el arco.
+        #expect(abs(body.velocity.dot(radial)) / speed < 0.15)
     }
 
     @Test("Ante dos anclas equidistantes gana la de delante")
