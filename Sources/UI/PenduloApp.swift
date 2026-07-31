@@ -74,6 +74,12 @@ struct RootView: View {
         .task {
             GameCenter.authenticate()
             scene.showMenuBackdrop()
+
+            // Para capturas y depuración: `xcrun simctl launch ... -autoplay` entra
+            // directo a jugar, sin atravesar el menú a mano.
+            if ProcessInfo.processInfo.arguments.contains("-autoplay") {
+                startRun()
+            }
         }
     }
 

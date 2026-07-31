@@ -377,6 +377,56 @@ enum Tuning {
         static let substituteGain: CGFloat = 1.0
     }
 
+    // MARK: - Decorado
+    //
+    // Nada de esto afecta a la física ni a la colisión: es el mundo alrededor del
+    // juego. Vive aquí igualmente porque son números, y los números viven aquí.
+
+    enum Scenery {
+        /// Cuánto se mueve cada capa de vegetación respecto a la cámara. Por debajo
+        /// de 1 se quedan atrás, y eso es lo que se lee como distancia; a 0 parecerían
+        /// pegadas al cristal.
+        static let parallaxFar: CGFloat = 0.20
+        static let parallaxNear: CGFloat = 0.45
+
+        static let canopyFarHeight: CGFloat = 460
+        static let canopyNearHeight: CGFloat = 320
+        static let canopyBumps: Int = 14
+
+        /// Motas de polen suspendidas. Suficientes para que el aire exista, pocas
+        /// para no competir con las luces que sí informan.
+        static let pollenCount: Int = 22
+        static let pollenRadius: CGFloat = 4
+        static let pollenDriftDuration: CGFloat = 6
+
+        /// Hasta dónde llega la luz de la luciérnaga en las zonas a ciegas.
+        static let lightHoleRadius: CGFloat = 230
+
+        /// La flor: corola, núcleo y el tallo del que cuelga.
+        static let flowerPetalCount: Int = 5
+        static let flowerPetalLength: CGFloat = 17
+        static let flowerCoreRadius: CGFloat = 7
+        /// Cuánto se abre y brilla la flor cuando está al alcance. Es lo que enseña
+        /// el radio de agarre sin un solo cartel.
+        static let flowerReadyScale: CGFloat = 1.35
+
+        /// La luciérnaga: alas, ojos y antenas. Todo cabe dentro del círculo de
+        /// colisión salvo lo que se lee como vaporoso.
+        static let wingLength: CGFloat = 42
+        static let wingWidth: CGFloat = 20
+        static let wingFlapDuration: CGFloat = 0.12
+        static let eyeRadius: CGFloat = 4
+        static let antennaLength: CGFloat = 18
+
+        /// El abdomen late a la cadencia del háptico de proximidad, así que quien
+        /// juega con el móvil sobre la mesa aprende igual el idioma. Estos son los
+        /// límites del brillo entre latido y latido.
+        static let blinkDimAlpha: CGFloat = 0.45
+        static let blinkBrightAlpha: CGFloat = 1.0
+        /// Cadencia del parpadeo ocioso, cuando no hay muro del que avisar.
+        static let idleBlinkInterval: CGFloat = 1.6
+    }
+
     // MARK: - HUD dentro de la escena
     //
     // El marcador es parte del juego, no del shell: vive en la escena y viaja con
@@ -386,7 +436,9 @@ enum Tuning {
         static let scoreFontSize: CGFloat = 120
         static let deathFontSize: CGFloat = 64
         /// Desplazamientos respecto al centro de la cámara.
-        static let scoreOffsetY: CGFloat = 760
+        /// Bajado de 760 tras verlo en pantalla: a esa altura la Dynamic Island se
+        /// comía el marcador.
+        static let scoreOffsetY: CGFloat = 600
         static let deathOffsetY: CGFloat = -160
         static let blindNoticeOffsetY: CGFloat = 420
         /// Cuánto dura el cartel que explica las zonas a ciegas la primera vez.
@@ -401,13 +453,16 @@ enum Tuning {
         static let squashScale: CGFloat = 1.18
         static let squashDuration: CGFloat = 0.12
 
-        static let trailNodeCount: Int = 14
-        static let trailFadeDuration: CGFloat = 0.35
-        /// Opacidad de la primera marca de estela. Por encima de ~0,45 la estela
-        /// compite con el farolillo y deja de leerse quién es quién.
-        static let trailPeakAlpha: CGFloat = 0.32
+        /// Menos marcas y más separadas que al principio: con 14 muy juntas la
+        /// estela se pegaba al cuerpo y la luciérnaga parecía una oruga. Ahora es un
+        /// rastro de luz que se apaga, que es lo que deja una luciérnaga al pasar.
+        static let trailNodeCount: Int = 9
+        static let trailFadeDuration: CGFloat = 0.45
+        /// Opacidad de la primera marca. Por encima de ~0,3 la estela compite con el
+        /// cuerpo y deja de leerse quién es quién.
+        static let trailPeakAlpha: CGFloat = 0.22
         /// Cuánto se estrecha la estela hacia el final.
-        static let trailTailScale: CGFloat = 0.25
+        static let trailTailScale: CGFloat = 0.18
 
         /// Cada cuántos muros completa el cielo un ciclo entero. 24 es algo más que
         /// una partida buena: el jugador nota que el mundo respira, pero no ve el
