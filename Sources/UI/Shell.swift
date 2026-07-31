@@ -9,17 +9,66 @@ private extension View {
     }
 }
 
-/// Tarjeta translúcida sobre la escena. Se usa material y no el cristal de iOS 26
-/// a propósito (ver D-017 en docs/decisiones.md).
+/// El ámbar de la luciérnaga y el cian de las flores, para que la interfaz
+/// pertenezca al mismo mundo que el juego en vez de parecer una capa de sistema
+/// pegada encima.
+private let fireflyAmber = Color(red: 1.00, green: 0.78, blue: 0.32)
+private let flowerCyan = Color(red: 0.55, green: 0.92, blue: 0.86)
+
+/// Tarjeta sobre la escena. Se usa material y no el cristal de iOS 26 a propósito
+/// (ver D-017 en docs/decisiones.md), pero con halo cálido y borde tenue: el
+/// material a secas se leía como un rectángulo gris apagado sobre la noche.
 private struct Card<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
         content
-            .padding(32)
-            .background(.ultraThinMaterial, in: .rect(cornerRadius: 28))
-            .shadow(radius: 30)
+            .padding(.vertical, 36)
+            .padding(.horizontal, 32)
+            .background {
+                RoundedRectangle(cornerRadius: 32)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        // Resplandor cálido detrás del contenido, como si la
+                        // luciérnaga iluminara la tarjeta desde dentro.
+                        RadialGradient(colors: [fireflyAmber.opacity(0.16), .clear],
+                                       center: .top,
+                                       startRadius: 0,
+                                       endRadius: 320)
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 32)
+                            .strokeBorder(fireflyAmber.opacity(0.30), lineWidth: 1)
+                    }
+            }
+            .shadow(color: .black.opacity(0.55), radius: 30, y: 12)
             .padding(.horizontal, 24)
+    }
+}
+
+/// Botón principal: relleno cálido con degradado y halo, en vez del azul de
+/// sistema. Es el único elemento que pide ser pulsado, y tiene que notarse.
+private struct PrimaryButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(.title2, design: .rounded, weight: .heavy))
+                .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.05))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background {
+                    Capsule().fill(
+                        LinearGradient(colors: [fireflyAmber,
+                                                Color(red: 0.98, green: 0.65, blue: 0.22)],
+                                       startPoint: .top,
+                                       endPoint: .bottom))
+                }
+                .shadow(color: fireflyAmber.opacity(0.45), radius: 18, y: 4)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -29,6 +78,7 @@ struct MenuView: View {
     let settings: GameSettings
     let onPlay: () -> Void
     let onSettings: () -> Void
+    let onLeaderboard: () -> Void
     /// Cinco toques en el título abren la pantalla de hápticos, como manda el brief.
     let onSecretDebug: () -> Void
 
@@ -48,29 +98,29 @@ struct MenuView: View {
                     }
                     .accessibilityAddTraits(.isHeader)
 
-                Text("Mantén pulsado para agarrarte.\nSuelta para salir volando.")
+                Text("Mantén pulsado para agarrarte a una flor.\nSuelta para salir volando.")
                     .font(.system(.body, design: .rounded))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.75))
 
                 if settings.best > 0 {
-                    Text("récord \(settings.best)")
-                        .font(.system(.title3, design: .rounded, weight: .semibold))
-                        .foregroundStyle(.orange.opacity(0.9))
+                    Label("\(settings.best)", systemImage: "trophy.fill")
+                        .font(.system(.title3, design: .rounded, weight: .bold))
+                        .foregroundStyle(fireflyAmber)
                 }
 
-                Button(action: onPlay) {
-                    Text("Jugar")
-                        .font(.system(.title2, design: .rounded, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                PrimaryButton(title: "Jugar", action: onPlay)
 
-                Button("Ajustes", action: onSettings)
-                    .font(.system(.body, design: .rounded))
-                    .tint(.secondary)
+                HStack(spacing: 28) {
+                    Button(action: onLeaderboard) {
+                        Label("Clasificación", systemImage: "list.number")
+                    }
+                    Button(action: onSettings) {
+                        Label("Ajustes", systemImage: "slider.horizontal.3")
+                    }
+                }
+                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                .foregroundStyle(flowerCyan.opacity(0.85))
             }
         }
     }
@@ -84,37 +134,39 @@ struct GameOverView: View {
     let isNewRecord: Bool
     let onRetry: () -> Void
     let onMenu: () -> Void
+    let onLeaderboard: () -> Void
 
     var body: some View {
         Card {
             VStack(spacing: 20) {
                 Text("\(score)")
                     .gameTitle()
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(fireflyAmber)
+                    .shadow(color: fireflyAmber.opacity(0.5), radius: 24)
                     .contentTransition(.numericText())
 
                 if isNewRecord {
-                    Text("¡récord!")
+                    Label("¡tu mejor marca!", systemImage: "sparkles")
                         .font(.system(.title3, design: .rounded, weight: .bold))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(fireflyAmber)
                 } else {
-                    Text("récord \(best)")
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(.secondary)
+                    Label("\(best)", systemImage: "trophy.fill")
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.65))
                 }
 
-                Button(action: onRetry) {
-                    Text("Otra vez")
-                        .font(.system(.title2, design: .rounded, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                PrimaryButton(title: "Otra vez", action: onRetry)
 
-                Button("Menú", action: onMenu)
-                    .font(.system(.body, design: .rounded))
-                    .tint(.secondary)
+                HStack(spacing: 28) {
+                    Button(action: onLeaderboard) {
+                        Label("Clasificación", systemImage: "list.number")
+                    }
+                    Button(action: onMenu) {
+                        Label("Menú", systemImage: "house.fill")
+                    }
+                }
+                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                .foregroundStyle(flowerCyan.opacity(0.85))
             }
         }
     }

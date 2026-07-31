@@ -21,6 +21,36 @@ enum GameCenter {
         }
     }
 
+    /// Abre la clasificación de Game Center sobre el juego.
+    ///
+    /// La presenta UIKit directamente y no SwiftUI porque `GKGameCenterViewController`
+    /// trae su propia navegación y su propio botón de cerrar: envolverlo en un
+    /// `sheet` daría dos barras y dos formas de salir.
+    static func showLeaderboard() {
+        guard isAuthenticated else { return }
+
+        let controller = GKGameCenterViewController(leaderboardID: leaderboardID,
+                                                    playerScope: .global,
+                                                    timeScope: .allTime)
+        controller.gameCenterDelegate = delegate
+
+        guard let root = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .rootViewController else { return }
+
+        root.present(controller, animated: true)
+    }
+
+    private static let delegate = LeaderboardDelegate()
+
+    private final class LeaderboardDelegate: NSObject, GKGameCenterControllerDelegate {
+        func gameCenterViewControllerDidFinish(_ controller: GKGameCenterViewController) {
+            controller.dismiss(animated: true)
+        }
+    }
+
     static func submit(score: Int) {
         guard isAuthenticated, score > 0 else { return }
         Task {

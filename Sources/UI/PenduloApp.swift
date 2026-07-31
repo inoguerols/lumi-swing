@@ -51,6 +51,7 @@ struct RootView: View {
                 MenuView(settings: settings,
                          onPlay: startRun,
                          onSettings: { showingSettings = true },
+                         onLeaderboard: GameCenter.showLeaderboard,
                          onSecretDebug: { showingDebug = true })
                     .transition(.opacity)
 
@@ -62,7 +63,8 @@ struct RootView: View {
                              best: model.best,
                              isNewRecord: model.isNewRecord,
                              onRetry: startRun,
-                             onMenu: showMenu)
+                             onMenu: showMenu,
+                             onLeaderboard: GameCenter.showLeaderboard)
                     .transition(.opacity)
             }
         }

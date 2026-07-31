@@ -85,7 +85,11 @@ enum WorldGenerator {
         let wall = Wall(x: wallX, gapCenterY: center, gapHeight: gapHeight)
         return Chunk(index: index,
                      wall: wall,
-                     anchors: anchors(index: index, wallX: wallX, gapCenterY: center, rng: &rng),
+                     anchors: anchors(index: index,
+                                      wallX: wallX,
+                                      gapCenterY: center,
+                                      gapHeight: gapHeight,
+                                      rng: &rng),
                      isBlind: isBlind)
     }
 
@@ -164,6 +168,28 @@ enum WorldGenerator {
         return lower <= upper ? lower...upper : nil
     }
 
+    /// A qué distancia máxima del muro puede estar la flor que lo abre.
+    ///
+    /// Colgado a distancia `D`, el arco cruza el plano del muro `L − √(L² − D²)` por
+    /// debajo de la flor. Para que ese cruce caiga dentro del hueco, esa caída tiene
+    /// que ser menor que el margen del hueco — y como la flor puede estar hasta
+    /// `anchorHeightJitter` desplazada, el margen se cuenta descontándolo.
+    ///
+    /// Se calcula por puerta, no con una constante: el hueco se estrecha con la
+    /// dificultad, y una distancia segura en el muro 10 es una trampa en el 125.
+    static func maxWallDistance(forGapHeight gapHeight: CGFloat) -> CGFloat {
+        let rope = Tuning.Pendulum.ropeLength
+        let margin = gapHeight / 2
+            - Tuning.Player.radius
+            - Tuning.WorldGen.anchorHeightJitter
+        guard margin > 0 else { return Tuning.WorldGen.anchorWallClearance }
+
+        let vertical = max(0, rope - margin)
+        let maximum = (rope * rope - vertical * vertical).squareRoot()
+        return max(Tuning.WorldGen.anchorWallClearance,
+                   min(maximum, Tuning.WorldGen.anchorMaxWallDistance))
+    }
+
     static func anchorHeightRange(forGapCenterY gapCenterY: CGFloat) -> ClosedRange<CGFloat> {
         let ideal = gapCenterY + Tuning.Pendulum.ropeLength
         let ceiling = Tuning.World.ceilingY - Tuning.WorldGen.anchorCeilingMargin
@@ -176,6 +202,7 @@ enum WorldGenerator {
     private static func anchors(index: Int,
                                 wallX: CGFloat,
                                 gapCenterY: CGFloat,
+                                gapHeight: CGFloat,
                                 rng: inout SplitMix64) -> [Anchor] {
         let previousWallX = index > 1
             ? DifficultyCurve.wallX(forWall: index - 1)
@@ -184,51 +211,42 @@ enum WorldGenerator {
         let upper = wallX - Tuning.WorldGen.anchorWallClearance
         guard upper > lower else { return [] }
 
-        // La altura del farol la manda el hueco, no el azar: colgando de él hay que
-        // poder ponerse a la altura por la que se pasa.
+        // La altura de la flor la manda el hueco, no el azar: colgando de ella hay
+        // que poder ponerse a la altura por la que se pasa.
         let yRange = anchorHeightRange(forGapCenterY: gapCenterY)
-        var count = Tuning.WorldGen.anchorsPerChunk
-        if index >= Tuning.WorldGen.singleAnchorFromWall,
-           rng.nextCGFloat(in: 0...1) < Tuning.WorldGen.singleAnchorChance {
-            count = 1
-        }
-        if upper - lower < Tuning.WorldGen.anchorMinSeparationX { count = 1 }
 
-        // El primer farol de la partida no se sortea a ciegas: se coloca donde el
-        // jugador pueda alcanzarlo desde su posición inicial. Empezar sin asidero
-        // no es dificultad, es una partida perdida antes de tocar la pantalla.
+        // LA LLAVE: la flor que abre esta puerta. Va lo bastante cerca del muro como
+        // para que el arco lo cruce por dentro del hueco (ver `anchorMaxWallDistance`).
+        let keyLow = min(max(lower, wallX - maxWallDistance(forGapHeight: gapHeight)), upper)
+        let keyX = rng.nextCGFloat(in: keyLow...upper)
+
+        var keyY = rng.nextCGFloat(in: yRange)
         if index == 1 {
-            let reachableX = (Tuning.Player.startX + Tuning.WorldGen.firstAnchorMinOffsetX)
-                ... (Tuning.Player.startX + Tuning.WorldGen.firstAnchorMaxOffsetX)
-            // El primer farol tiene que cumplir dos cosas a la vez: estar al alcance
-            // desde el punto de partida y llevar al primer hueco. Se cruza el rango
-            // alcanzable con el que sirve para el hueco; si no se solapan, gana el
-            // del hueco, porque llegar al farol y no poder pasar es peor que nada.
+            // La primera flor cumple dos cosas a la vez: está al alcance desde el
+            // punto de partida y abre el primer hueco. Se cruzan los dos rangos; si
+            // no se solapan gana el del hueco, porque llegar a la flor y no poder
+            // pasar es peor que no llegar.
             let reachableY = (Tuning.Player.startY + Tuning.WorldGen.firstAnchorMinOffsetY)
                 ... (Tuning.Player.startY + Tuning.WorldGen.firstAnchorMaxOffsetY)
-            let firstY = intersection(reachableY, yRange) ?? yRange
-            let x = rng.nextCGFloat(in: reachableX)
-            let first = Anchor(position: CGPoint(x: x, y: rng.nextCGFloat(in: firstY)))
-            let secondLower = x + Tuning.WorldGen.anchorMinSeparationX
-            guard secondLower <= upper else { return [first] }
-            return [first,
-                    Anchor(position: CGPoint(x: rng.nextCGFloat(in: secondLower...upper),
-                                             y: rng.nextCGFloat(in: yRange)))]
+            keyY = rng.nextCGFloat(in: intersection(reachableY, yRange) ?? yRange)
         }
+        let key = Anchor(position: CGPoint(x: keyX, y: keyY))
 
-        if count == 1 {
-            return [Anchor(position: CGPoint(x: rng.nextCGFloat(in: lower...upper),
-                                             y: rng.nextCGFloat(in: yRange)))]
-        }
+        var wantsSecond = index < Tuning.WorldGen.singleAnchorFromWall
+            || rng.nextCGFloat(in: 0...1) >= Tuning.WorldGen.singleAnchorChance
+        if index == 1 { wantsSecond = true }
+        guard wantsSecond else { return [key] }
 
-        // La primera se coloca dejando sitio para la separación mínima, así que la
-        // segunda siempre cabe. Sin esto, un mal sorteo las junta y el jugador se
-        // encuentra dos faroles solapados que se comportan como uno.
-        let firstX = rng.nextCGFloat(in: lower...(upper - Tuning.WorldGen.anchorMinSeparationX))
-        let secondX = rng.nextCGFloat(in: (firstX + Tuning.WorldGen.anchorMinSeparationX)...upper)
-        return [
-            Anchor(position: CGPoint(x: firstX, y: rng.nextCGFloat(in: yRange))),
-            Anchor(position: CGPoint(x: secondX, y: rng.nextCGFloat(in: yRange)))
-        ]
+        // LA DE PASO: sirve para encadenar hasta la llave, no para cruzar. Va tan
+        // atrás que su propio arco ni siquiera alcanza el muro — si quedara a media
+        // distancia, columpiarse desde ella acabaría estampándote contra la parte
+        // maciza sin que el jugador pudiera hacer nada por evitarlo.
+        let outOfReachOfWall = wallX - Tuning.Pendulum.ropeLength - Tuning.Player.radius
+        let secondUpper = min(keyX - Tuning.WorldGen.anchorMinSeparationX, outOfReachOfWall)
+        guard secondUpper > lower else { return [key] }
+
+        let second = Anchor(position: CGPoint(x: rng.nextCGFloat(in: lower...secondUpper),
+                                              y: rng.nextCGFloat(in: yRange)))
+        return [key, second]
     }
 }

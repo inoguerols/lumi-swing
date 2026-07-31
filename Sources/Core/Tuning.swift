@@ -261,6 +261,19 @@ enum Tuning {
         static let anchorMinSeparationX: CGFloat = 200
         static let anchorWallClearance: CGFloat = 110
 
+        /// A qué distancia máxima del muro puede estar la flor que da acceso a él.
+        ///
+        /// Es geometría, no gusto. Colgado de una flor a distancia `D` del muro, el
+        /// arco cruza el plano del muro a la altura `flor.y − √(L² − D²)`. Con `D`
+        /// pequeño eso cae en pleno hueco; según crece, el punto de cruce sube y
+        /// acaba estrellándote contra la parte maciza. Con L=320 y hueco de 360 el
+        /// límite ronda los 273 pt, así que 240 deja margen.
+        ///
+        /// Antes las flores se repartían por todo el hueco entre muros y podían
+        /// quedar a 450: desde esas, el balanceo terminaba en muerte hiciera el
+        /// jugador lo que hiciera. **Cada puerta tiene que tener su llave.**
+        static let anchorMaxWallDistance: CGFloat = 240
+
         /// Margen mínimo entre el hueco y suelo/techo, para que nunca haya un
         /// hueco pegado al borde en el que sea imposible entrar en ángulo.
         static let gapEdgeMargin: CGFloat = 180

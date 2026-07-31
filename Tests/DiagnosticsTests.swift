@@ -135,6 +135,57 @@ struct DiagnosticsTests {
         """)
     }
 
+    // MARK: - ¿Hay flores que te matan hagas lo que hagas?
+
+    /// Colgado de una flor a distancia `D` del muro, el arco cruza el plano del muro
+    /// a la altura `flor.y − √(L² − D²)`. Si esa altura cae en la parte maciza, el
+    /// balanceo termina en muerte **hiciera lo que hiciera el jugador**: no es
+    /// dificultad, es una trampa.
+    ///
+    /// Las flores lejanas (D mayor que la liana) no llegan al muro y son inocuas.
+    @Test("Ninguna flor condena el balanceo contra el muro")
+    func noAnchorForcesACrash() {
+        var traps = 0
+        var total = 0
+        var examples: [String] = []
+
+        for index in 1...300 {
+            let chunk = WorldGenerator.chunk(index: index, seed: 7)
+            let rope = Tuning.Pendulum.ropeLength
+            let safeLow = chunk.wall.gapBottomY + Tuning.Player.radius
+            let safeHigh = chunk.wall.gapTopY - Tuning.Player.radius
+
+            for anchor in chunk.anchors {
+                let distance = chunk.wall.x - anchor.position.x
+                // Detrás del muro o fuera del alcance de la liana: no puede chocar.
+                guard distance > 0, distance < rope else { continue }
+                total += 1
+
+                let crossing = anchor.position.y - (rope * rope - distance * distance).squareRoot()
+                if crossing < safeLow || crossing > safeHigh {
+                    traps += 1
+                    if examples.count < 5 {
+                        examples.append(
+                            "muro \(index): flor a \(Int(distance)) pt del muro cruza a "
+                            + "\(Int(crossing)), y el hueco va de \(Int(safeLow)) a \(Int(safeHigh))")
+                    }
+                }
+            }
+        }
+
+        print("""
+
+        ┌─ FLORES QUE CONDENAN EL BALANCEO ───────────────────────────
+        │ Flores cuyo arco alcanza el muro: \(total)
+        │ De ellas, las que lo cruzan por lo macizo: \(traps)
+        \(examples.map { "│   \($0)" }.joined(separator: "\n"))
+        └──────────────────────────────────────────────────────────────
+
+        """)
+
+        #expect(traps == 0, "\(traps) flores llevan al muro hagas lo que hagas")
+    }
+
     // MARK: - ¿Se puede jugar bien?
 
     /// Un bot que **sabe** el gesto que el juego pide: agárrate al farol de delante,
