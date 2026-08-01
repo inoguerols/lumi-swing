@@ -29,6 +29,10 @@ targets:
       path: Sources/Resources/Info.plist
       properties:
         CFBundleDisplayName: Lumi Swing
+        # El juego no usa cifrado propio. Sin esta clave, App Store Connect pregunta
+        # por el cumplimiento de exportación en CADA subida y bloquea la compilación
+        # hasta que respondes a mano.
+        ITSAppUsesNonExemptEncryption: false
         UIRequiresFullScreen: true
         UIStatusBarHidden: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
