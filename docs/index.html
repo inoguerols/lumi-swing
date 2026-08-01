@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumi Swing — Columpia la luz en la noche</title>
+<meta name="description" content="Un juego de un solo dedo. Eres una luciérnaga que se columpia de flor en flor. Y cada pocas puertas, la luz se apaga y solo te queda el tacto.">
+<meta property="og:title" content="Lumi Swing">
+<meta property="og:description" content="Columpia la luz en la noche. Y cuando la selva se traga la luz, guíate solo con el tacto.">
+<meta property="og:type" content="website">
+<link rel="icon" href="img/icono.png">
+<style>
+  :root {
+    --noche: #12251f;
+    --noche-honda: #0a1613;
+    --panel: #16302a;
+    --ambar: #ffc74f;
+    --ambar-vivo: #ffb03a;
+    --cian: #8ceadb;
+    --texto: #e8f3ee;
+    --tenue: #9db3aa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--noche-honda);
+    color: var(--texto);
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--cian); }
+  .envoltorio { max-width: 940px; margin: 0 auto; padding: 0 24px; }
+
+  header {
+    background:
+      radial-gradient(1000px 520px at 50% -8%, rgba(255,199,79,.16), transparent 62%),
+      linear-gradient(180deg, var(--noche) 0%, var(--noche-honda) 100%);
+    text-align: center;
+    padding: 88px 0 72px;
+    border-bottom: 1px solid rgba(140,234,219,.14);
+  }
+  header img.icono {
+    width: 132px; height: 132px;
+    border-radius: 30px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.55), 0 0 70px rgba(255,199,79,.22);
+  }
+  h1 {
+    font-size: clamp(2.6rem, 8vw, 4rem);
+    margin: 26px 0 6px;
+    color: var(--ambar);
+    letter-spacing: -.02em;
+  }
+  .lema { color: var(--tenue); font-size: 1.2rem; margin: 0 0 30px; }
+
+  .boton {
+    display: inline-block;
+    background: linear-gradient(180deg, var(--ambar), var(--ambar-vivo));
+    color: #1a1508;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 14px 34px;
+    border-radius: 999px;
+    box-shadow: 0 8px 26px rgba(255,199,79,.32);
+  }
+  .pronto { color: var(--tenue); font-size: .92rem; margin-top: 14px; }
+
+  section { padding: 66px 0; border-bottom: 1px solid rgba(140,234,219,.09); }
+  h2 { font-size: 1.75rem; margin: 0 0 14px; color: var(--texto); }
+  p.entradilla { color: var(--tenue); max-width: 660px; margin: 0 0 30px; }
+
+  .rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 22px; }
+  .tarjeta {
+    background: var(--panel);
+    border: 1px solid rgba(255,199,79,.2);
+    border-radius: 18px;
+    padding: 24px;
+  }
+  .tarjeta h3 { margin: 0 0 8px; font-size: 1.06rem; color: var(--ambar); }
+  .tarjeta p { margin: 0; color: var(--tenue); font-size: .96rem; }
+
+  .capturas { display: flex; gap: 18px; overflow-x: auto; padding-bottom: 10px; }
+  .capturas img {
+    width: 232px; flex: 0 0 auto;
+    border-radius: 20px;
+    border: 1px solid rgba(140,234,219,.18);
+  }
+
+  .destacado {
+    background: linear-gradient(180deg, rgba(140,234,219,.07), transparent);
+    border-left: 3px solid var(--cian);
+    padding: 22px 26px;
+    border-radius: 0 14px 14px 0;
+    margin: 26px 0 0;
+  }
+  .destacado p { margin: 0; color: var(--texto); }
+
+  footer { padding: 46px 0 70px; color: var(--tenue); font-size: .92rem; text-align: center; }
+  footer a { margin: 0 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="envoltorio">
+    <img class="icono" src="img/icono.png" alt="Icono de Lumi Swing: una luciérnaga brillando en la selva">
+    <h1>Lumi Swing</h1>
+    <p class="lema">Columpia la luz en la noche</p>
+    <a class="boton" href="#como-se-juega">Cómo se juega</a>
+    <p class="pronto">Próximamente en la App Store · iPhone · Gratis, sin anuncios</p>
+  </div>
+</header>
+
+<section id="como-se-juega">
+  <div class="envoltorio">
+    <h2>Un dedo, nada más</h2>
+    <p class="entradilla">
+      Eres una luciérnaga. <strong>Mantén pulsado</strong> para engancharte con una
+      liana a la flor de luna más cercana y balancearte. <strong>Suelta</strong> y
+      sales despedido con la inercia que hayas acumulado. No hay más botones ni más
+      gestos: todo lo que aprendas será sobre cuándo soltar.
+    </p>
+    <div class="capturas">
+      <img src="img/juego.png" alt="La luciérnaga colgando de una flor de luna con la liana tensa">
+      <img src="img/menu.png" alt="Menú de Lumi Swing">
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="envoltorio">
+    <h2>Y entonces se apaga la luz</h2>
+    <p class="entradilla">
+      Cada pocas puertas, la espesura se traga la luna y los troncos desaparecen.
+      Ahí solo te queda el tacto.
+    </p>
+    <div class="rejilla">
+      <div class="tarjeta">
+        <h3>El ritmo es la distancia</h3>
+        <p>Las vibraciones se aceleran a medida que el muro se acerca. Cuanto más rápido el pulso, menos tiempo te queda.</p>
+      </div>
+      <div class="tarjeta">
+        <h3>La textura es el hueco</h3>
+        <p>Una vibración continua y sorda aparece cuando estás a la altura por la que se pasa. Si zumba, cabes.</p>
+      </div>
+      <div class="tarjeta">
+        <h3>Y vale el doble</h3>
+        <p>Las puertas a ciegas puntúan por dos. El riesgo se recompensa, no solo se tolera.</p>
+      </div>
+    </div>
+    <div class="destacado">
+      <p>
+        Se puede pasar con la pantalla boca abajo. Y si no percibes los hápticos,
+        el ajuste <strong>«Ver los muros a ciegas»</strong> mantiene la penumbra y la
+        puntuación doble dejando un contorno tenue: el juego se puede terminar sin
+        depender del tacto.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="envoltorio">
+    <h2>Lo que no vas a encontrar</h2>
+    <div class="rejilla">
+      <div class="tarjeta"><h3>Sin anuncios</h3><p>Ninguno. Ni entre partidas ni recompensados.</p></div>
+      <div class="tarjeta"><h3>Sin compras</h3><p>No hay nada que comprar dentro del juego.</p></div>
+      <div class="tarjeta"><h3>Sin esperas</h3><p>Ni vidas, ni energía, ni temporizadores.</p></div>
+      <div class="tarjeta"><h3>Sin registro</h3><p>No pide cuenta y funciona sin conexión.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="soporte">
+  <div class="envoltorio">
+    <h2>Soporte</h2>
+    <p class="entradilla">
+      ¿Algo no funciona, o se te ocurre cómo mejorarlo? Escribe a
+      <a href="mailto:ignacio@clinicanoguerol.com">ignacio@clinicanoguerol.com</a>
+      y te contesto. Si es un fallo, cuéntame qué iPhone tienes y qué estabas
+      haciendo justo antes: con eso suele bastar para encontrarlo.
+    </p>
+    <p class="entradilla">
+      El juego es de código abierto:
+      <a href="https://github.com/inoguerols/lumi-swing">github.com/inoguerols/lumi-swing</a>.
+      También puedes abrir una incidencia ahí.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="envoltorio">
+    <a href="privacidad.html">Privacidad</a> ·
+    <a href="#soporte">Soporte</a> ·
+    <a href="https://github.com/inoguerols/lumi-swing">Código</a>
+    <p>© 2026 Ignacio Noguerol</p>
+  </div>
+</footer>
+
+</body>
+</html>
