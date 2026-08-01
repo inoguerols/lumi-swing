@@ -46,6 +46,47 @@ struct BlindZoneTests {
         #expect(simulation.nextChunk?.index == 11)
     }
 
+    @Test("La rampa del velo se liga a la distancia al muro de entrada, no a un salto")
+    func telegraphProgressRampsWithDistance() {
+        let spacing: CGFloat = 300
+
+        // A más de una separación de muro, aún no se nota nada.
+        #expect(BlindZones.telegraphProgress(distanceToEntry: spacing * 2, wallSpacing: spacing) == 0)
+        // A mitad de esa ventana de aviso, va a medias.
+        #expect(BlindZones.telegraphProgress(distanceToEntry: spacing / 2, wallSpacing: spacing) == 0.5)
+        // Justo en el muro de entrada, cerrado del todo.
+        #expect(BlindZones.telegraphProgress(distanceToEntry: 0, wallSpacing: spacing) == 1)
+        // Ya pasado el muro (distancia negativa): sigue cerrado, no se dispara.
+        #expect(BlindZones.telegraphProgress(distanceToEntry: -50, wallSpacing: spacing) == 1)
+    }
+
+    @Test("El velo se telegrafía antes de cruzar el muro de entrada, no de golpe al cruzarlo")
+    func blindZoneTelegraphsAheadOfEntry() {
+        var simulation = GameSimulation(seed: 1)
+        let entryIndex = Tuning.BlindZone.firstWall
+        let entryX = DifficultyCurve.wallX(forWall: entryIndex)
+        let spacing = DifficultyCurve.spacing(forWall: entryIndex - 1)
+        let window = spacing * Tuning.BlindZone.telegraphWalls
+
+        // A más de una separación de muro del muro de entrada, el velo sigue abierto.
+        // (El margen extra de 100 pt deja el farolillo bien lejos del cuerpo sólido
+        // del muro anterior, igual que `pastWallMargin`.)
+        simulation.placeBody(at: CGPoint(x: entryX - window - 100, y: Tuning.Player.startY))
+        _ = simulation.advance(dt: 1.0 / 120, holding: false)
+        #expect(simulation.blindZoneTelegraph == 0)
+
+        // A mitad de esa ventana ya se está cerrando, pero no del todo.
+        simulation.placeBody(at: CGPoint(x: entryX - window / 2, y: Tuning.Player.startY))
+        _ = simulation.advance(dt: 1.0 / 120, holding: false)
+        #expect(simulation.blindZoneTelegraph > 0 && simulation.blindZoneTelegraph < 1)
+
+        // Ya dentro de la zona (justo tras cruzar el muro de entrada), cerrado del
+        // todo — y sin que se abra un instante camino del siguiente muro a ciegas.
+        simulation.placeBody(at: CGPoint(x: entryX + Self.pastWallMargin, y: Tuning.Player.startY))
+        _ = simulation.advance(dt: 1.0 / 120, holding: false)
+        #expect(simulation.blindZoneTelegraph == 1)
+    }
+
     @Test("A ciegas, el hueco es más generoso de lo que sería a la vista")
     func blindGapIsMoreForgiving() {
         let blind = WorldGenerator.chunk(index: 11, seed: 5)

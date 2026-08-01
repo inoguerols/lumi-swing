@@ -68,6 +68,17 @@ enum BlindZones {
                            Tuning.BlindZone.durationStart + zone / Tuning.BlindZone.durationGrowthEvery)
         return wall < start + duration
     }
+
+    /// Cuánto se debe cerrar el velo por anticipación, dada la distancia que
+    /// falta hasta el muro de entrada de la próxima zona a ciegas y la
+    /// separación entre muros en ese tramo. 0 = aún fuera de la ventana de
+    /// aviso, 1 = ya se puede cerrar del todo. Se mide en distancia, no en
+    /// tiempo: así el aviso llega igual de pronto se vaya rápido o despacio.
+    static func telegraphProgress(distanceToEntry: CGFloat, wallSpacing: CGFloat) -> CGFloat {
+        guard wallSpacing > 0 else { return distanceToEntry <= 0 ? 1 : 0 }
+        let window = wallSpacing * Tuning.BlindZone.telegraphWalls
+        return clamp(1 - distanceToEntry / window, 0, 1)
+    }
 }
 
 enum WorldGenerator {

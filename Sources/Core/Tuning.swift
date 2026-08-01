@@ -330,6 +330,20 @@ enum Tuning {
         /// Opacidad del contorno de los muros con el refuerzo visual asistido
         /// (sin Taptic Engine o con hápticos apagados).
         static let assistedOutlineAlpha: CGFloat = 0.12
+
+        /// Ventana de aviso, en separaciones de muro: el velo empieza a cerrarse
+        /// cuando quedan `telegraphWalls` muros para llegar al de entrada, no de
+        /// golpe al cruzarlo. En distancia, no en tiempo, para que se telegrafíe
+        /// igual se vaya rápido o lento.
+        static let telegraphWalls: CGFloat = 1
+
+        /// Cuánto late el agujero de luz del velo, en proporción sobre su tamaño
+        /// base (±5 % ≈ el punto medio del rango 4-6 % que pide el GDD).
+        static let breatheAmplitude: CGFloat = 0.05
+
+        /// Cuántos muros a ciegas hay que cruzar con éxito antes de que el cartel
+        /// deje de repetirse en cada zona nueva.
+        static let noticeThreshold: Int = 6
     }
 
     // MARK: - Háptica

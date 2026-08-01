@@ -396,6 +396,13 @@ final class GameScene: SKScene {
             let duration = TimeInterval(interval) * 0.6
             haloNode.run(.fadeAlpha(to: Tuning.Scenery.haloDimAlpha, duration: duration))
             haloNode.run(.scale(to: Tuning.Scenery.haloDimScale, duration: duration))
+
+            // El agujero de luz del velo late con la misma cadencia: la oscuridad
+            // entera se convierte en el Taptic Engine hecho visible, para quien
+            // juega con el móvil sobre la mesa y no lo tiene en la mano.
+            darknessNode.removeAllActions()
+            darknessNode.setScale(1 - Tuning.BlindZone.breatheAmplitude)
+            darknessNode.run(.scale(to: 1 + Tuning.BlindZone.breatheAmplitude, duration: duration))
         }
     }
 
@@ -463,6 +470,9 @@ final class GameScene: SKScene {
                 scoreLabel.text = "\(simulation.score)"
                 model.score = simulation.score
                 popScore(doubled: points > 1)
+                // Un muro a ciegas puntúa el doble: cruzarlo con éxito es lo que
+                // cuenta para dejar de necesitar el cartel de aviso.
+                if points > 1 { settings.blindWallsCrossed += 1 }
                 emit(.score)
             case .died:
                 shakeRemaining = Tuning.Camera.deathShakeDuration
@@ -484,7 +494,7 @@ final class GameScene: SKScene {
                 break
             case .enteredBlindZone:
                 emit(.blindEnter)
-                showBlindNoticeIfFirstTime()
+                showBlindNoticeIfStillLearning()
             case .exitedBlindZone:
                 emit(.blindExit)
             }
@@ -553,6 +563,8 @@ final class GameScene: SKScene {
 
         darkness = 0
         darknessNode.alpha = 0
+        darknessNode.removeAllActions()
+        darknessNode.setScale(1)
         proximityBucket = nil
         alignmentBucket = nil
         shakeRemaining = 0
@@ -655,7 +667,10 @@ final class GameScene: SKScene {
     // MARK: - Zonas a ciegas
 
     private func updateDarkness(dt: CGFloat) {
-        let target: CGFloat = simulation.isBlind ? 1 : 0
+        // Antes conmutaba en el instante de cruzar el muro: ahora la rampa sigue
+        // la distancia al muro de entrada, así que la noche se ve venir en vez de
+        // caer encima.
+        let target = simulation.blindZoneTelegraph
         let rate = 1 / Tuning.BlindZone.darkenDuration
         darkness = lerp(darkness, target, 1 - exponentialDecay(rate: rate, dt: dt))
 
@@ -665,13 +680,12 @@ final class GameScene: SKScene {
         darknessNode.alpha = darkness * peak
     }
 
-    /// Solo la primera vez en la vida de la instalación: a partir de ahí, el cartel
-    /// sería ruido. Quien ya sabe que los muros desaparecen no necesita que se lo
-    /// recuerden cada doce muros.
-    private func showBlindNoticeIfFirstTime() {
-        let key = "pendulo.blindNoticeSeen"
-        guard !UserDefaults.standard.bool(forKey: key) else { return }
-        UserDefaults.standard.set(true, forKey: key)
+    /// Se repite en cada zona nueva mientras el jugador no lleve suficientes
+    /// muros a ciegas cruzados con éxito (`Tuning.BlindZone.noticeThreshold`):
+    /// una sola vez por instalación era demasiado poco para que la mecánica se
+    /// aprendiera de verdad, y para siempre habría sido ruido.
+    private func showBlindNoticeIfStillLearning() {
+        guard settings.needsBlindNotice else { return }
 
         blindNoticeLabel.removeAllActions()
         blindNoticeLabel.run(.sequence([

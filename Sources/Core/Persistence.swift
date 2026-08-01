@@ -14,6 +14,7 @@ final class GameSettings {
         static let audio = "pendulo.audio"
         static let visibleBlindZones = "pendulo.visibleBlindZones"
         static let reduceFlashing = "pendulo.reduceFlashing"
+        static let blindWallsCrossed = "pendulo.blindWallsCrossed"
     }
 
     private let defaults: UserDefaults
@@ -35,6 +36,14 @@ final class GameSettings {
         didSet { defaults.set(reduceFlashing, forKey: Key.reduceFlashing) }
     }
 
+    /// Muros a ciegas cruzados con éxito en toda la vida de la instalación. No es
+    /// un bool de "ya lo vio una vez": el cartel se repite hasta que el jugador
+    /// haya demostrado que sabe cruzar a ciegas varias veces, no solo que abrió
+    /// la app una vez.
+    var blindWallsCrossed: Int {
+        didSet { defaults.set(blindWallsCrossed, forKey: Key.blindWallsCrossed) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.best = defaults.integer(forKey: Key.best)
@@ -45,6 +54,7 @@ final class GameSettings {
         self.audioEnabled = defaults.object(forKey: Key.audio) as? Bool ?? true
         self.visibleBlindZones = defaults.bool(forKey: Key.visibleBlindZones)
         self.reduceFlashing = defaults.bool(forKey: Key.reduceFlashing)
+        self.blindWallsCrossed = defaults.integer(forKey: Key.blindWallsCrossed)
     }
 
     /// Devuelve `true` si el resultado es un récord nuevo.
@@ -59,5 +69,11 @@ final class GameSettings {
     /// lo ha pedido, o porque ha apagado el canal que los sustituía.
     var needsAssistedBlindZones: Bool {
         visibleBlindZones || !hapticsEnabled
+    }
+
+    /// Mientras no se hayan cruzado `Tuning.BlindZone.noticeThreshold` muros a
+    /// ciegas, el cartel explicativo se sigue enseñando en cada zona nueva.
+    var needsBlindNotice: Bool {
+        blindWallsCrossed < Tuning.BlindZone.noticeThreshold
     }
 }

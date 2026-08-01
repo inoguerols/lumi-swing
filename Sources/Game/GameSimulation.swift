@@ -51,6 +51,29 @@ struct GameSimulation: Sendable {
         nextChunk.map { $0.wall.x - body.position.x }
     }
 
+    /// El último muro que se ha dejado atrás, si sigue vivo en la ventana. Sirve
+    /// para saber si ya se está dentro de una zona a ciegas (en vez de solo
+    /// acercándose a ella): mientras el muro de detrás sea a ciegas, el que viene
+    /// justo después también lo es casi siempre, y el velo no debe abrirse un
+    /// instante entre los dos.
+    private var lastCrossedChunk: Chunk? {
+        chunks.last { $0.wall.x <= body.position.x }
+    }
+
+    /// Cuánto debería estar cerrado el velo ahora mismo: 1 si ya se está dentro
+    /// de una zona a ciegas, y si no, la rampa de anticipación hacia la próxima
+    /// (0 lejos, 1 justo al llegar al muro de entrada). Sustituye al antiguo
+    /// interruptor binario atado a `isBlind`, que saltaba a oscuro entero sin
+    /// avisar antes.
+    var blindZoneTelegraph: CGFloat {
+        if lastCrossedChunk?.isBlind == true { return 1 }
+        guard let entry = chunks.first(where: { $0.isBlind && $0.wall.x >= body.position.x })
+        else { return 0 }
+        let distance = entry.wall.x - body.position.x
+        let spacing = DifficultyCurve.spacing(forWall: entry.index - 1)
+        return BlindZones.telegraphProgress(distanceToEntry: distance, wallSpacing: spacing)
+    }
+
     /// Cuánto le sobra al farolillo para pasar por el hueco siguiente. Negativo
     /// significa que, tal y como va, no cabe.
     var clearanceAtNextWall: CGFloat? {

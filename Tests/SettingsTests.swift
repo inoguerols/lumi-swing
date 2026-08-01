@@ -68,4 +68,19 @@ struct SettingsTests {
         settings.visibleBlindZones = true
         #expect(settings.needsAssistedBlindZones)
     }
+
+    @Test("El cartel de aviso se repite hasta cruzar N muros a ciegas, y luego calla")
+    func blindNoticeStopsAfterThreshold() {
+        let settings = GameSettings(defaults: isolatedDefaults("notice"))
+        #expect(settings.blindWallsCrossed == 0)
+        #expect(settings.needsBlindNotice)
+
+        for _ in 0..<(Tuning.BlindZone.noticeThreshold - 1) {
+            settings.blindWallsCrossed += 1
+            #expect(settings.needsBlindNotice)
+        }
+
+        settings.blindWallsCrossed += 1
+        #expect(!settings.needsBlindNotice)
+    }
 }
