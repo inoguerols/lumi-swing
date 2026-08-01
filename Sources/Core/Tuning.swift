@@ -495,11 +495,31 @@ enum Tuning {
         static let eyeRadius: CGFloat = 4
         static let antennaLength: CGFloat = 18
 
-        /// El abdomen late a la cadencia del háptico de proximidad, así que quien
-        /// juega con el móvil sobre la mesa aprende igual el idioma. Estos son los
-        /// límites del brillo entre latido y latido.
-        static let blinkDimAlpha: CGFloat = 0.45
-        static let blinkBrightAlpha: CGFloat = 1.0
+        /// F4: silueta propia del cuerpo, alargada en vertical (cabeza arriba con
+        /// ojos/antenas, cola abajo). Mitades siempre ≤ `Player.radius` para no sacar
+        /// masa opaca fuera del círculo de colisión — el óvalo solo resta esquinas.
+        static let bodyLength: CGFloat = 50
+        static let bodyWidth: CGFloat = 32
+
+        /// La gota de luz en el abdomen trasero: círculo con una punta hacia abajo.
+        /// `lanternOffsetY` la centra en la mitad baja del cuerpo (la cola).
+        static let lanternRadius: CGFloat = 11
+        /// Con `lanternOffsetY` y `lanternRadius`, la punta de la gota queda a 25pt
+        /// del centro — 1pt de margen dentro del círculo de colisión (26). Subir
+        /// cualquiera de los tres sin recalcular la sacaría fuera.
+        static let lanternTailLength: CGFloat = 5
+        static let lanternHalfAngle: CGFloat = 0.75
+        static let lanternOffsetY: CGFloat = -9
+
+        /// El halo detrás de todo late al ritmo del háptico de proximidad — el
+        /// parpadeo ya no toca el cuerpo (F4: eso era lo que lo hacía "transparentar").
+        /// Radio en múltiplos de `Player.radius`; alpha y escala oscilan entre estos
+        /// límites cada latido.
+        static let haloRadiusScale: CGFloat = 1.8
+        static let haloDimAlpha: CGFloat = 0.20
+        static let haloBrightAlpha: CGFloat = 0.55
+        static let haloDimScale: CGFloat = 0.85
+        static let haloBrightScale: CGFloat = 1.05
         /// Cadencia del parpadeo ocioso, cuando no hay muro del que avisar.
         static let idleBlinkInterval: CGFloat = 1.6
     }

@@ -37,9 +37,14 @@ enum Palette {
     // MARK: - El jugador (cálido)
 
     static let firefly = SKColor(red: 1.00, green: 0.88, blue: 0.40, alpha: 1)
+    /// Color del halo del parpadeo (aditivo, detrás de todo). Ya no es el borde del
+    /// cuerpo: F4 saca el latido del propio cuerpo para que este nunca se transparente.
     static let fireflyGlow = SKColor(red: 0.85, green: 1.00, blue: 0.45, alpha: 0.35)
     static let fireflyWing = SKColor(red: 0.80, green: 0.95, blue: 0.85, alpha: 0.50)
-    static let fireflyDetail = SKColor(red: 0.15, green: 0.14, blue: 0.08, alpha: 0.85)
+    /// Cuerpo de la luciérnaga: opaco de verdad (antes 0.85 de alpha, que es justo lo
+    /// que hacía "transparentar" el material). Ahora es el color del cuerpo entero,
+    /// no solo del detalle de ojos/antenas.
+    static let fireflyDetail = SKColor(red: 0.15, green: 0.14, blue: 0.08, alpha: 1)
 
     // MARK: - Los asideros (fríos)
 

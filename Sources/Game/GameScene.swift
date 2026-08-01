@@ -17,10 +17,16 @@ final class GameScene: SKScene {
 
     private let worldNode = SKNode()
     private let cameraNode = SKCameraNode()
-    /// La luciérnaga entera. El abdomen es el que mide el radio de colisión; alas,
-    /// ojos y antenas van dentro o se leen vaporosos, y nunca engañan sobre qué mata.
+    /// La luciérnaga entera. `bodyNode` es la silueta que mide el radio de colisión
+    /// (óvalo inscrito en el círculo, nunca lo desborda); alas, ojos y antenas van
+    /// dentro o se leen vaporosos, y nunca engañan sobre qué mata. `haloNode` va
+    /// detrás de todo y es el único que late con el parpadeo — el cuerpo se queda
+    /// opaco siempre, así no "transparenta".
     private let playerNode = SKNode()
-    private let abdomenNode = SKShapeNode(circleOfRadius: Tuning.Player.radius)
+    private let haloNode = SKShapeNode(circleOfRadius: Tuning.Player.radius * Tuning.Scenery.haloRadiusScale)
+    private let bodyNode = SKShapeNode(ellipseOf: CGSize(width: Tuning.Scenery.bodyWidth,
+                                                          height: Tuning.Scenery.bodyLength))
+    private let lanternNode = SKShapeNode()
     private var wingNodes: [SKShapeNode] = []
     private let ropeNode = SKShapeNode()
 
@@ -264,14 +270,24 @@ final class GameScene: SKScene {
     // MARK: - La luciérnaga
 
     private func buildFirefly() {
-        // Alas primero: van detrás del cuerpo y se leen translúcidas, para que nadie
-        // las confunda con masa sólida.
+        // Halo primero: el más al fondo de todos, aditivo, y el único nodo que el
+        // parpadeo toca (ver `updateBlink`). El cuerpo ya no se desvanece nunca.
+        haloNode.fillColor = Palette.fireflyGlow
+        haloNode.strokeColor = .clear
+        haloNode.blendMode = .add
+        haloNode.alpha = Tuning.Scenery.haloDimAlpha
+        playerNode.addChild(haloNode)
+
+        // Alas: opacas y con mezcla normal (ya no aditivas), pero se añaden antes
+        // que el cuerpo — el propio orden de dibujo las recorta contra la silueta
+        // opaca en vez de dejarlas solapar por encima como una capa de brillo.
         for side in [-1, 1] as [CGFloat] {
             let wing = SKShapeNode(ellipseOf: CGSize(width: Tuning.Scenery.wingLength,
                                                      height: Tuning.Scenery.wingWidth))
             wing.fillColor = Palette.fireflyWing
             wing.strokeColor = .clear
-            wing.blendMode = .add
+            wing.blendMode = .alpha
+            wing.alpha = 0.85
             wing.position = CGPoint(x: side * Tuning.Player.radius * 0.5,
                                     y: Tuning.Player.radius * 0.55)
             wing.zRotation = side * 0.45
@@ -279,15 +295,30 @@ final class GameScene: SKScene {
             wingNodes.append(wing)
         }
 
-        abdomenNode.fillColor = Palette.firefly
-        abdomenNode.strokeColor = Palette.fireflyGlow
-        abdomenNode.lineWidth = 10
-        abdomenNode.glowWidth = 16
-        playerNode.addChild(abdomenNode)
+        // Cuerpo: un único óvalo opaco, sin stroke (la costura translúcida de antes
+        // vivía justo ahí). Alargado con la cabeza arriba (ojos/antenas) y la cola
+        // abajo, donde va la gota encendida.
+        bodyNode.fillColor = Palette.fireflyDetail
+        bodyNode.strokeColor = .clear
+        bodyNode.alpha = 1
+        playerNode.addChild(bodyNode)
+
+        // La gota de luz del abdomen trasero: el único acento cálido grande del
+        // cuerpo, la silueta de "1cm²" que pedía la crítica.
+        lanternNode.path = teardropPath(radius: Tuning.Scenery.lanternRadius,
+                                        tailLength: Tuning.Scenery.lanternTailLength,
+                                        halfAngle: Tuning.Scenery.lanternHalfAngle)
+        lanternNode.fillColor = Palette.firefly
+        lanternNode.strokeColor = .clear
+        lanternNode.alpha = 1
+        lanternNode.position = CGPoint(x: 0, y: Tuning.Scenery.lanternOffsetY)
+        playerNode.addChild(lanternNode)
 
         for side in [-1, 1] as [CGFloat] {
+            // Ojos cálidos sobre la cabeza oscura: con el cuerpo ya no amarillo,
+            // un ojo del mismo `fireflyDetail` desaparecería contra él.
             let eye = SKShapeNode(circleOfRadius: Tuning.Scenery.eyeRadius)
-            eye.fillColor = Palette.fireflyDetail
+            eye.fillColor = Palette.firefly
             eye.strokeColor = .clear
             eye.position = CGPoint(x: side * Tuning.Player.radius * 0.34,
                                    y: Tuning.Player.radius * 0.30)
@@ -312,6 +343,28 @@ final class GameScene: SKScene {
         startWingFlap()
     }
 
+    /// La gota de luz de la cola: un círculo que se estrecha en una punta hacia
+    /// abajo. Un único `CGPath` cerrado — nada de superponer formas translúcidas,
+    /// que es justo lo que dejaba costuras en el diseño anterior.
+    private func teardropPath(radius: CGFloat, tailLength: CGFloat, halfAngle: CGFloat) -> CGPath {
+        let tip = CGPoint(x: 0, y: -radius - tailLength)
+        let rightAngle = -CGFloat.pi / 2 + halfAngle
+        let leftAngle = -CGFloat.pi / 2 - halfAngle
+        let right = CGPoint(x: cos(rightAngle) * radius, y: sin(rightAngle) * radius)
+        let left = CGPoint(x: cos(leftAngle) * radius, y: sin(leftAngle) * radius)
+
+        let path = CGMutablePath()
+        path.move(to: right)
+        // El arco largo, por arriba, deja el hueco de abajo para la punta.
+        path.addArc(center: .zero, radius: radius,
+                    startAngle: rightAngle, endAngle: leftAngle + 2 * .pi,
+                    clockwise: false)
+        path.addQuadCurve(to: tip, control: CGPoint(x: left.x * 0.35, y: (left.y + tip.y) * 0.5))
+        path.addQuadCurve(to: right, control: CGPoint(x: right.x * 0.35, y: (right.y + tip.y) * 0.5))
+        path.closeSubpath()
+        return path
+    }
+
     private func startWingFlap() {
         let duration = TimeInterval(Tuning.Scenery.wingFlapDuration)
         for wing in wingNodes {
@@ -323,9 +376,10 @@ final class GameScene: SKScene {
         }
     }
 
-    /// El abdomen late al ritmo del háptico de proximidad: las luciérnagas parpadean
+    /// El halo late al ritmo del háptico de proximidad: las luciérnagas parpadean
     /// de por sí, y aquí ese parpadeo **es el mapa**. Quien juega con el móvil sobre
-    /// la mesa aprende el idioma igual que quien lo lleva en la mano.
+    /// la mesa aprende el idioma igual que quien lo lleva en la mano. El cuerpo ya
+    /// no lo toca (F4) — solo el halo late en alpha y escala.
     private func updateBlink(dt: CGFloat) {
         let interval = simulation.isBlind
             ? (simulation.distanceToNextWall
@@ -336,10 +390,12 @@ final class GameScene: SKScene {
         blinkTimer -= dt
         if blinkTimer <= 0 {
             blinkTimer = interval
-            abdomenNode.removeAllActions()
-            abdomenNode.alpha = Tuning.Scenery.blinkBrightAlpha
-            abdomenNode.run(.fadeAlpha(to: Tuning.Scenery.blinkDimAlpha,
-                                       duration: TimeInterval(interval) * 0.6))
+            haloNode.removeAllActions()
+            haloNode.alpha = Tuning.Scenery.haloBrightAlpha
+            haloNode.setScale(Tuning.Scenery.haloBrightScale)
+            let duration = TimeInterval(interval) * 0.6
+            haloNode.run(.fadeAlpha(to: Tuning.Scenery.haloDimAlpha, duration: duration))
+            haloNode.run(.scale(to: Tuning.Scenery.haloDimScale, duration: duration))
         }
     }
 
@@ -542,13 +598,17 @@ final class GameScene: SKScene {
             if trailPositions.count > trailNodes.count { trailPositions.removeLast() }
         }
 
+        // El nodo 0 se deja siempre apagado: con la posición y el radio de
+        // `trailPositions[0]` (el propio jugador) quedaba un disco aditivo clavado
+        // bajo el personaje. La estela visible empieza en el índice 1, ya un paso
+        // detrás del cuerpo.
         for (index, node) in trailNodes.enumerated() {
-            guard index < trailPositions.count else {
+            guard index > 0, index - 1 < trailPositions.count else {
                 node.alpha = 0
                 continue
             }
-            node.position = trailPositions[index]
-            node.alpha = Effects.trailAlpha(index: index)
+            node.position = trailPositions[index - 1]
+            node.alpha = Effects.trailAlpha(index: index - 1)
         }
     }
 
