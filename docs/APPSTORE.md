@@ -1,4 +1,12 @@
-# Péndulo — Qué falta para llegar a la App Store
+# Lumi Swing — Qué falta para llegar a la App Store
+
+> Los textos de la ficha están en [ficha-app-store.md](ficha-app-store.md) y la
+> política de privacidad en [privacidad.md](privacidad.md). Las capturas, en
+> `capturas/` a 1320×2868.
+
+**Ya hecho:** nombre (Lumi Swing), Bundle ID `com.noguerol.lumiswing`, icono,
+pantalla de arranque, capturas, ficha completa, política de privacidad y
+cuestionario de privacidad resuelto («no se recopilan datos»).
 
 El juego está completo y jugable (S1–S6). Lo que queda pide una cuenta de Apple
 Developer, y por eso quedó fuera de esta tanda (D-006).
@@ -7,15 +15,13 @@ Developer, y por eso quedó fuera de esta tanda (D-006).
 
 - [ ] **Team ID** en `project.yml` → `settings.base.DEVELOPMENT_TEAM`. Ahora mismo la
       firma es automática y sin equipo: compila para simulador, no para dispositivo.
-- [ ] **Bundle ID** `com.noguerol.pendulo` registrado en el portal de Apple. Es
+- [ ] **Bundle ID** `com.noguerol.lumiswing` registrado en el portal de Apple. Es
       irreversible una vez publicado (D-007).
 - [ ] **Capacidad Game Center** activada para ese Bundle ID, y leaderboard
       `pendulo.highscore` creada en App Store Connect. Ese identificador también es
       irreversible. El código ya la usa y falla en silencio si no existe.
-- [ ] **Ficha en App Store Connect**: nombre, subtítulo, descripción, palabras clave,
-      categoría (Juegos › Arcade), clasificación por edades (4+ — no hay violencia,
-      compras ni contenido generado por usuarios).
-- [ ] **Capturas** para 6,7" y 6,9". `xcrun simctl io "iPhone 17" screenshot` sirve.
+- [x] ~~Ficha en App Store Connect~~: los textos están en `ficha-app-store.md`, listos para pegar.
+- [x] ~~Capturas~~: en `capturas/`, a 1320×2868 (6,9"), el único tamaño de iPhone que Apple exige.
 - [ ] **Privacidad**: el juego no recoge absolutamente nada. En el cuestionario hay
       que marcar «no se recopilan datos» — Game Center lo gestiona Apple, no nosotros.
 
@@ -31,23 +37,21 @@ Developer, y por eso quedó fuera de esta tanda (D-006).
 - [ ] **Perfilar en un iPhone de hace tres años** con Instruments (Time Profiler y
       Core Animation FPS). El presupuesto de S5 es cero caídas de frames y no se ha
       podido medir aquí: el simulador no dice nada útil sobre rendimiento real.
-- [ ] Sustituir el **icono placeholder** (`Sources/Resources/Assets.xcassets`). El
-      actual está generado por código y cumple, pero no es un icono de tienda.
-- [ ] Decidir el **nombre definitivo**. «Péndulo» es nombre de trabajo; conviene
-      comprobar que no está cogido en la App Store española.
+- [x] ~~Icono~~: luciérnaga sobre selva, generado por código. Se regenera con el script del scratchpad.
+- [x] ~~Nombre~~: **Lumi Swing**. Queda comprobar que no está cogido en la App Store.
 
 ## 3. Compilar y archivar
 
 ```bash
 cd "~/Claude Developer/Juegos/Pendulo"
 xcodegen generate
-open Pendulo.xcodeproj
+open LumiSwing.xcodeproj
 ```
 
-En Xcode: target `Pendulo` → Signing & Capabilities → tu equipo → añadir Game Center
+En Xcode: target `LumiSwing` → Signing & Capabilities → tu equipo → añadir Game Center
 → Product › Archive → Distribute App.
 
-`Pendulo.xcodeproj` **no está en git a propósito**: lo genera XcodeGen desde
+`LumiSwing.xcodeproj` **no está en git a propósito**: lo genera XcodeGen desde
 `project.yml`, que es la fuente de verdad. Si lo editas a mano en Xcode, el siguiente
 `xcodegen generate` se lo lleva por delante.
 

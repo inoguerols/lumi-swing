@@ -53,6 +53,14 @@ enum Palette {
 
     static let trunk = SKColor(red: 0.10, green: 0.16, blue: 0.14, alpha: 1)
     static let trunkEdge = SKColor(red: 0.18, green: 0.28, blue: 0.24, alpha: 1)
+    /// El canto del tronco que mira a la luna. Un rectángulo de un solo color es
+    /// una barra; con un lado iluminado es madera.
+    static let trunkLit = SKColor(red: 0.19, green: 0.31, blue: 0.27, alpha: 1)
+    /// Vetas de corteza. Apenas se notan de cerca y son justo lo que separa una
+    /// superficie de un relleno.
+    static let bark = SKColor(red: 0.06, green: 0.11, blue: 0.10, alpha: 1)
+    static let grass = SKColor(red: 0.13, green: 0.28, blue: 0.22, alpha: 1)
+    static let leaf = SKColor(red: 0.11, green: 0.24, blue: 0.20, alpha: 1)
     /// Musgo lunar en los bordes del hueco: señala la puerta, no la pared.
     static let moss = SKColor(red: 0.42, green: 0.62, blue: 0.45, alpha: 1)
     static let ground = SKColor(red: 0.05, green: 0.10, blue: 0.09, alpha: 1)

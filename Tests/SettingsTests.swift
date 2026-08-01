@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Pendulo
+@testable import LumiSwing
 
 @Suite("Récord y ajustes")
 @MainActor

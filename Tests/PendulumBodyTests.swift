@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import Pendulo
+@testable import LumiSwing
 
 @Suite("Física del péndulo")
 struct PendulumBodyTests {

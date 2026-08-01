@@ -1,4 +1,4 @@
-name: Pendulo
+name: LumiSwing
 
 options:
   bundleIdPrefix: com.noguerol
@@ -17,62 +17,70 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
 
 targets:
-  Pendulo:
+  LumiSwing:
     type: application
     platform: iOS
     sources:
       - path: Sources
+    # Info.plist declarado en vez de autogenerado: `GENERATE_INFOPLIST_FILE` solo
+    # admite claves sueltas por build setting, y la pantalla de arranque es un
+    # diccionario.
+    info:
+      path: Sources/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Lumi Swing
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # ProMotion: sin esto iOS limita el juego a 60 Hz.
+        CADisableMinimumFrameDurationOnPhone: true
+        # Mismo verde y misma luciérnaga que el menú, para que el paso de la
+        # pantalla de arranque al juego no tenga costura.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchLogo
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.noguerol.pendulo
-        PRODUCT_NAME: Pendulo
-        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.noguerol.lumiswing
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Solo iPhone, solo portrait: decision D-003 en docs/decisiones.md
         TARGETED_DEVICE_FAMILY: "1"
-        INFOPLIST_KEY_CFBundleDisplayName: "Péndulo"
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
-        INFOPLIST_KEY_UIRequiresFullScreen: YES
-        INFOPLIST_KEY_UIStatusBarHidden: YES
-        # ProMotion: sin esto iOS limita el juego a 60 Hz (slice S5)
-        INFOPLIST_KEY_CADisableMinimumFrameDurationOnPhone: YES
 
-  PenduloTests:
+  LumiSwingTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: Tests
     dependencies:
-      - target: Pendulo
+      - target: LumiSwing
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
 
   # Lo que ningún test unitario puede afirmar: que la app se abre y se juega.
-  PenduloUITests:
+  LumiSwingUITests:
     type: bundle.ui-testing
     platform: iOS
     sources:
       - path: UITests
     dependencies:
-      - target: Pendulo
+      - target: LumiSwing
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: Pendulo
+        TEST_TARGET_NAME: LumiSwing
 
 schemes:
-  Pendulo:
+  LumiSwing:
     build:
       targets:
-        Pendulo: all
-        PenduloTests: [test]
-        PenduloUITests: [test]
+        LumiSwing: all
+        LumiSwingTests: [test]
+        LumiSwingUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
-        - PenduloTests
-        - PenduloUITests
+        - LumiSwingTests
+        - LumiSwingUITests

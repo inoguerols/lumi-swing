@@ -68,7 +68,7 @@ final class GameScene: SKScene {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
-        fatalError("Péndulo construye su escena en código, no desde un .sks")
+        fatalError("Lumi Swing construye su escena en código, no desde un .sks")
     }
 
     override func didMove(to view: SKView) {
@@ -332,6 +332,9 @@ final class GameScene: SKScene {
         scoreLabel.fontColor = Palette.lantern
         scoreLabel.position = CGPoint(x: 0, y: Tuning.HUD.scoreOffsetY)
         scoreLabel.text = "0"
+        // Oculto fuera de la partida: en el menú era un "0" gigante flotando sobre
+        // la tarjeta sin significar nada, y en el game over duplicaba al de la ficha.
+        scoreLabel.alpha = 0
         cameraNode.addChild(scoreLabel)
 
         // El velo se dibuja generoso porque `.aspectFill` recorta distinto en cada
@@ -363,17 +366,27 @@ final class GameScene: SKScene {
         // Sin esta guarda, la escena corre durante los frames que hay entre que
         // aparece y que el shell la pausa: el farolillo cae, muere, y el jugador se
         // encuentra la pantalla de game over antes de haber tocado nada.
+        //
+        // El temblor de muerte queda FUERA de ella y se resuelve antes: la muerte
+        // cambia la fase a `.dead` en el mismo frame que arranca el temblor, así que
+        // si se saliera aquí el temblor se calcularía una sola vez y la cámara se
+        // quedaría congelada descentrada — el efecto no se veía nunca y parecía un
+        // salto de cámara roto.
+        if let previous = lastUpdateTime, model.phase != .playing {
+            settleShake(dt: CGFloat(currentTime - previous))
+        }
         guard model.phase == .playing else { return }
         guard let lastUpdateTime else { return }
 
         let dt = CGFloat(currentTime - lastUpdateTime)
         guard dt > 0 else { return }
 
-        for event in simulation.advance(dt: dt, holding: holding) {
+        for event in simulation.advance(dt: dt, holding: Self.isDemo ? demoInput() : holding) {
             switch event {
-            case .scored:
+            case .scored(let points):
                 scoreLabel.text = "\(simulation.score)"
                 model.score = simulation.score
+                popScore(doubled: points > 1)
                 emit(.score)
             case .died:
                 shakeRemaining = Tuning.Camera.deathShakeDuration
@@ -436,12 +449,15 @@ final class GameScene: SKScene {
     func startRun() {
         restart()
         lastUpdateTime = nil
+        scoreLabel.alpha = 0
+        scoreLabel.run(.fadeIn(withDuration: 0.2))
     }
 
     /// Deja el mundo quieto y visible detrás del menú.
     func showMenuBackdrop() {
         restart()
         lastUpdateTime = nil
+        scoreLabel.alpha = 0
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { holding = false }
@@ -531,6 +547,26 @@ final class GameScene: SKScene {
         ]))
     }
 
+    /// El marcador acusa cada punto. Ocurre cada par de segundos, así que el pop es
+    /// corto; y a ciegas es mayor y vira al cian de las flores, porque ese muro vale
+    /// el doble y el GDD pide que el marcador lo **recompense**, no que lo tolere.
+    private func popScore(doubled: Bool) {
+        let scale = doubled ? Tuning.HUD.scorePopDoubled : Tuning.HUD.scorePop
+        scoreLabel.removeAllActions()
+        scoreLabel.setScale(1)
+        scoreLabel.run(.sequence([
+            .scale(to: scale, duration: 0.06),
+            .scale(to: 1.0, duration: 0.14)
+        ]))
+
+        guard doubled else { return }
+        scoreLabel.fontColor = Palette.moonflower
+        scoreLabel.run(.sequence([
+            .wait(forDuration: 0.25),
+            .run { [weak self] in self?.scoreLabel.fontColor = Palette.lantern }
+        ]))
+    }
+
     private func updateSky() {
         guard let wall = simulation.nextChunk?.index else { return }
         backgroundColor = Palette.sky(at: Effects.skyPhase(forWall: wall))
@@ -602,6 +638,39 @@ final class GameScene: SKScene {
         }
     }
 
+    /// Deja que el temblor termine aunque la partida ya haya acabado, y devuelve la
+    /// cámara a su sitio al agotarse.
+    private func settleShake(dt: CGFloat) {
+        guard shakeRemaining > 0 else { return }
+        shakeRemaining = max(0, shakeRemaining - dt)
+        let shake = Effects.shakeOffset(remaining: shakeRemaining, rng: &shakeRng)
+        cameraNode.position = CGPoint(x: cameraBase.x + shake.x, y: cameraBase.y + shake.y)
+    }
+
+    // MARK: - Modo demo
+
+    /// Se juega solo. Sirve para capturas y para grabar el vídeo de la ficha de la
+    /// App Store: capturar un juego de reflejos a mano da fotos torcidas, y aquí la
+    /// pose importa —la luciérnaga colgando de una flor con la liana tensa cuenta el
+    /// juego en una imagen—.
+    ///
+    /// Solo se activa con `-demo` en la línea de lanzamiento; en una partida normal
+    /// esta rama no existe.
+    static let isDemo = ProcessInfo.processInfo.arguments.contains("-demo")
+
+    private func demoInput() -> Bool {
+        let body = simulation.body
+        guard let attachment = body.attachment else {
+            return simulation.anchors.contains { anchor in
+                anchor.position.x > body.position.x
+                    && body.position.distance(to: anchor.position) <= Tuning.Pendulum.grabRadius
+            }
+        }
+        // Suelta pasado el punto bajo, cuando la inercia ya empuja hacia delante.
+        let pastLowestPoint = body.position.x > attachment.anchor.x
+        return !(pastLowestPoint && body.velocity.dx > 0 && body.velocity.dy > 0)
+    }
+
     /// Fire-and-forget: el motor háptico es un actor y no puede bloquear el frame.
     /// Si un pulso llega dos milisegundos tarde no pasa nada; si el frame se pierde,
     /// sí.
@@ -635,6 +704,7 @@ final class GameScene: SKScene {
         playerNode.position = simulation.body.position
         darknessNode.position = simulation.body.position
         highlightReachableFlowers()
+        swayStems(time: lastUpdateTime ?? 0)
 
         if let attachment = simulation.body.attachment {
             // La liana cuelga cuando está floja y se tensa al tirar. Una línea recta
@@ -674,15 +744,13 @@ final class GameScene: SKScene {
             (Tuning.World.floorY, wall.gapBottomY),
             (wall.gapTopY, Tuning.World.ceilingY)
         ]
+        var rng = SplitMix64(seed: UInt64(bitPattern: Int64(chunk.index)) &* 0x9E37_79B9)
         for (bottom, top) in segments where top > bottom {
-            let node = SKShapeNode(rect: CGRect(x: wall.x - thickness / 2,
-                                                y: bottom,
-                                                width: thickness,
-                                                height: top - bottom))
-            node.fillColor = Palette.trunk
-            node.strokeColor = Palette.trunkEdge
-            node.lineWidth = 2
-            walls.addChild(node)
+            walls.addChild(makeTrunk(rect: CGRect(x: wall.x - thickness / 2,
+                                                  y: bottom,
+                                                  width: thickness,
+                                                  height: top - bottom),
+                                     rng: &rng))
         }
 
         // Musgo lunar en los dos bordes del hueco. Señala la **puerta**, no la pared:
@@ -714,7 +782,108 @@ final class GameScene: SKScene {
         }
         container.addChild(flowers)
 
+        // Cada chunk dibuja su tramo de maleza y de dosel. Se genera por chunk y no
+        // a lo largo de todo el mundo por una razón práctica: el mundo mide 200.000
+        // pt y sembrarlo entero de hierba serían miles de nodos para tres pantallas
+        // de juego.
+        container.addChild(makeEdges(from: previousWallX(of: chunk), to: chunk.wall.x, rng: &rng))
+
         return container
+    }
+
+    private func previousWallX(of chunk: Chunk) -> CGFloat {
+        chunk.index > 1
+            ? DifficultyCurve.wallX(forWall: chunk.index - 1)
+            : Tuning.Player.startX - Tuning.World.wallThickness
+    }
+
+    /// Maleza en el suelo y hojas colgando del dosel.
+    ///
+    /// Es decoración pura: crece **hacia dentro** del área jugable pero no colisiona,
+    /// porque suelo y techo ya matan por su cuenta en `Collision`. Se queda corta a
+    /// propósito para que nadie la confunda con un obstáculo.
+    private func makeEdges(from startX: CGFloat, to endX: CGFloat, rng: inout SplitMix64) -> SKNode {
+        let node = SKNode()
+        guard endX > startX else { return node }
+
+        let step = Tuning.Scenery.undergrowthSpacing
+        var x = startX
+        while x < endX {
+            let width = rng.nextCGFloat(in: (step * 0.8)...(step * 1.6))
+            let height = rng.nextCGFloat(in: (step * 0.5)...(step * 1.5))
+
+            let blade = CGMutablePath()
+            blade.move(to: CGPoint(x: x, y: Tuning.World.floorY))
+            blade.addQuadCurve(to: CGPoint(x: x + width, y: Tuning.World.floorY),
+                               control: CGPoint(x: x + width / 2, y: Tuning.World.floorY + height))
+            let grass = SKShapeNode(path: blade)
+            grass.fillColor = Palette.grass
+            grass.strokeColor = .clear
+            grass.alpha = 0.9
+            node.addChild(grass)
+
+            let leafHeight = rng.nextCGFloat(in: (step * 0.4)...(step * 1.2))
+            let leafPath = CGMutablePath()
+            leafPath.move(to: CGPoint(x: x, y: Tuning.World.ceilingY))
+            leafPath.addQuadCurve(to: CGPoint(x: x + width, y: Tuning.World.ceilingY),
+                                  control: CGPoint(x: x + width / 2,
+                                                   y: Tuning.World.ceilingY - leafHeight))
+            let leaf = SKShapeNode(path: leafPath)
+            leaf.fillColor = Palette.leaf
+            leaf.strokeColor = .clear
+            leaf.alpha = 0.9
+            node.addChild(leaf)
+
+            x += width
+        }
+        return node
+    }
+
+    /// Un tronco, no una barra.
+    ///
+    /// Todo el dibujo cae **dentro** del rectángulo de colisión: el canto iluminado,
+    /// las vetas y el redondeo van hacia dentro, nunca sobresalen. Lo que se ve tiene
+    /// que ser exactamente lo que mata (pilar 2 del GDD), así que la decoración puede
+    /// quitar superficie visual pero jamás añadirla.
+    private func makeTrunk(rect: CGRect, rng: inout SplitMix64) -> SKNode {
+        let node = SKNode()
+
+        let body = SKShapeNode(rect: rect, cornerRadius: 5)
+        body.fillColor = Palette.trunk
+        body.strokeColor = Palette.trunkEdge
+        body.lineWidth = 2
+        node.addChild(body)
+
+        // El canto que mira a la luna, que está arriba a la izquierda.
+        let lit = SKShapeNode(rect: CGRect(x: rect.minX + 2,
+                                           y: rect.minY + 2,
+                                           width: rect.width * 0.28,
+                                           height: rect.height - 4),
+                              cornerRadius: 3)
+        lit.fillColor = Palette.trunkLit
+        lit.strokeColor = .clear
+        lit.alpha = 0.75
+        node.addChild(lit)
+
+        // Vetas: líneas verticales quebradas, con la semilla del chunk para que el
+        // mismo tronco tenga siempre la misma corteza.
+        for _ in 0..<3 {
+            let path = CGMutablePath()
+            let x = rng.nextCGFloat(in: (rect.minX + 10)...(rect.maxX - 8))
+            var y = rect.minY + rng.nextCGFloat(in: 0...80)
+            path.move(to: CGPoint(x: x, y: y))
+            while y < rect.maxY {
+                y = min(rect.maxY, y + rng.nextCGFloat(in: 90...220))
+                path.addLine(to: CGPoint(x: x + rng.nextCGFloat(in: -4...4), y: y))
+            }
+            let vein = SKShapeNode(path: path)
+            vein.strokeColor = Palette.bark
+            vein.lineWidth = 2.5
+            vein.alpha = 0.55
+            node.addChild(vein)
+        }
+
+        return node
     }
 
     /// Una flor de luna colgando de su tallo.
@@ -727,13 +896,7 @@ final class GameScene: SKScene {
         node.position = position
 
         let stem = SKShapeNode()
-        let path = CGMutablePath()
-        path.move(to: .zero)
-        // Sube hasta el techo con una comba mínima: cuelga, no está clavado.
-        let top = Tuning.World.ceilingY - position.y
-        path.addQuadCurve(to: CGPoint(x: 0, y: top),
-                          control: CGPoint(x: Tuning.World.anchorRadius * 1.6, y: top * 0.5))
-        stem.path = path
+        stem.name = Self.stemNodeName
         stem.strokeColor = Palette.stem
         stem.lineWidth = 3
         node.addChild(stem)
@@ -741,16 +904,20 @@ final class GameScene: SKScene {
         let corolla = SKNode()
         corolla.name = Self.corollaNodeName
         let petalCount = Tuning.Scenery.flowerPetalCount
+        let petalSize = Tuning.Scenery.flowerPetalLength
+
+        // Pétalos **anchos y solapados**, no radios finos apuntando hacia fuera. Con
+        // elipses estrechas la silueta salía en punta y todo el mundo la leía como
+        // una estrella; una corola es un contorno redondo y continuo con lóbulos, y
+        // el solape es lo que la cierra.
         for index in 0..<petalCount {
-            let petal = SKShapeNode(ellipseOf: CGSize(width: Tuning.Scenery.flowerPetalLength,
-                                                      height: Tuning.Scenery.flowerPetalLength * 0.55))
+            let angle = CGFloat(index) / CGFloat(petalCount) * 2 * .pi
+            let petal = SKShapeNode(circleOfRadius: petalSize * 0.52)
             petal.fillColor = Palette.moonflower
             petal.strokeColor = .clear
-            petal.alpha = 0.75
-            let angle = CGFloat(index) / CGFloat(petalCount) * 2 * .pi
-            petal.zRotation = angle
-            petal.position = CGPoint(x: cos(angle) * Tuning.Scenery.flowerPetalLength * 0.42,
-                                     y: sin(angle) * Tuning.Scenery.flowerPetalLength * 0.42)
+            petal.alpha = 0.9
+            petal.position = CGPoint(x: cos(angle) * petalSize * 0.46,
+                                     y: sin(angle) * petalSize * 0.46)
             corolla.addChild(petal)
         }
 
@@ -768,6 +935,7 @@ final class GameScene: SKScene {
     private static let wallsNodeName = "walls"
     private static let flowersNodeName = "flowers"
     private static let corollaNodeName = "corolla"
+    private static let stemNodeName = "stem"
     private static let mossThickness: CGFloat = 10
     /// Cuánto cuelga la liana por cada punto de holgura.
     private static let ropeSagFactor: CGFloat = 0.9
@@ -776,6 +944,39 @@ final class GameScene: SKScene {
     /// La flor que está al alcance se abre y brilla. Enseña el radio de agarre
     /// jugando, sin cartel: pulsar cuando algo está abierto engancha, y el jugador
     /// deduce la regla en dos intentos.
+    /// Los tallos ondulan; las flores **no se mueven**.
+    ///
+    /// Es deliberado: la flor es el asidero, y su posición de dibujo tiene que ser
+    /// exactamente la que usa la física. Mecer la flor daría más vida y mentiría
+    /// sobre dónde te vas a enganchar, que en un juego de precisión se paga caro.
+    /// Así que ondula la comba del tallo entre el techo y la flor, mientras los dos
+    /// extremos se quedan clavados donde están.
+    private func swayStems(time: TimeInterval) {
+        for chunk in simulation.chunks {
+            guard let flowers = chunkNodes[chunk.index]?
+                .childNode(withName: Self.flowersNodeName) else { continue }
+
+            for (index, flower) in flowers.children.enumerated() {
+                guard index < chunk.anchors.count,
+                      let stem = flower.childNode(withName: Self.stemNodeName) as? SKShapeNode
+                else { continue }
+
+                let top = Tuning.World.ceilingY - chunk.anchors[index].position.y
+                // Fase propia por flor: si todas ondularan a la vez parecerían una
+                // cortina, no una selva.
+                let phase = Double(chunk.index) * 1.7 + Double(index) * 2.9
+                let sway = CGFloat(sin(time * Double(Tuning.Scenery.stemSwaySpeed) + phase))
+                    * Tuning.Scenery.stemSwayAmplitude
+
+                let path = CGMutablePath()
+                path.move(to: .zero)
+                path.addQuadCurve(to: CGPoint(x: 0, y: top),
+                                  control: CGPoint(x: sway, y: top * 0.5))
+                stem.path = path
+            }
+        }
+    }
+
     private func highlightReachableFlowers() {
         let position = simulation.body.position
         for chunk in simulation.chunks {

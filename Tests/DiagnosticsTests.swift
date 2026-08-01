@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import Pendulo
+@testable import LumiSwing
 
 /// No verifica: **mide**. Existe porque un jugador humano dijo que no pasaba de
 /// dos o tres puertas, y para arreglar eso hace falta saber dónde y por qué muere,

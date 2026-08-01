@@ -30,7 +30,13 @@ enum Tuning {
         static let wallThickness: CGFloat = 46
 
         /// Grosor de las barras de suelo y techo, y radio del farol de un ancla.
-        static let boundsThickness: CGFloat = 80
+        ///
+        /// Subido de 80 a 700 por una razón de encuadre: el área jugable son 1500 pt
+        /// de los 1950 de escena, así que por arriba y por abajo sobra sitio — y con
+        /// barras finas volvía a asomar el cielo **detrás** del suelo, que delataba
+        /// que el mundo se acababa ahí. Ahora son sólidas hasta bien fuera de
+        /// pantalla, incluso con la cámara siguiendo al jugador a lo alto.
+        static let boundsThickness: CGFloat = 700
         static let anchorRadius: CGFloat = 14
 
         /// Longitud de las barras de suelo y techo. Un run largo son ~50 muros a
@@ -444,6 +450,14 @@ enum Tuning {
         /// para no competir con las luces que sí informan.
         static let moonRadius: CGFloat = 62
 
+        /// Anchura típica de cada mata de maleza y de cada hoja del dosel.
+        static let undergrowthSpacing: CGFloat = 70
+
+        /// Cuánto y cómo de rápido ondula el tallo de las flores. Amplitud pequeña a
+        /// propósito: es aire, no viento, y compite con lo que sí informa.
+        static let stemSwayAmplitude: CGFloat = 26
+        static let stemSwaySpeed: CGFloat = 1.1
+
         static let pollenCount: Int = 22
         static let pollenRadius: CGFloat = 4
         static let pollenDriftDuration: CGFloat = 6
@@ -490,6 +504,10 @@ enum Tuning {
         static let scoreOffsetY: CGFloat = 600
         static let deathOffsetY: CGFloat = -160
         static let blindNoticeOffsetY: CGFloat = 420
+        /// Cuánto salta el marcador al puntuar. El doble a ciegas salta más: es la
+        /// diferencia entre contabilizar el riesgo y celebrarlo.
+        static let scorePop: CGFloat = 1.18
+        static let scorePopDoubled: CGFloat = 1.34
         /// Cuánto dura el cartel que explica las zonas a ciegas la primera vez.
         static let blindNoticeDuration: CGFloat = 2.2
     }

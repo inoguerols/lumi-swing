@@ -144,9 +144,10 @@ struct MenuView: View {
     var body: some View {
         Card {
             VStack(spacing: 24) {
-                Text("Péndulo")
+                Text("Lumi Swing")
                     .gameTitle()
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(fireflyAmber)
+                    .shadow(color: fireflyAmber.opacity(0.5), radius: 24)
                     .onTapGesture {
                         titleTaps += 1
                         guard titleTaps >= 5 else { return }
