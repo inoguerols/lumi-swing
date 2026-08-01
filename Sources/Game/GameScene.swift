@@ -1,4 +1,5 @@
 import SpriteKit
+import UIKit
 
 /// SpriteKit hace de renderer, input y bucle de juego. La física no es suya:
 /// `GameSimulation` es la dueña del estado y esta clase solo lo dibuja
@@ -32,8 +33,8 @@ final class GameScene: SKScene {
     /// Latido del abdomen, sincronizado con el háptico de proximidad.
     private var blinkTimer: CGFloat = 0
     private var chunkNodes: [Int: SKNode] = [:]
-    private let scoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-    private let blindNoticeLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+    private let scoreLabel = SKLabelNode(fontNamed: GameScene.sfRoundedFontName(weight: .heavy))
+    private let blindNoticeLabel = SKLabelNode(fontNamed: GameScene.sfRoundedFontName(weight: .semibold))
     private let darknessNode = SKSpriteNode()
 
     /// 0 = se ve todo, 1 = a ciegas. Se interpola en vez de conmutar: el corte seco
@@ -55,6 +56,22 @@ final class GameScene: SKScene {
     private var shakeRng = SplitMix64(seed: 0x5EED)
     /// Posición de cámara sin el temblor sumado.
     private var cameraBase = CGPoint.zero
+
+    /// Apple no publica un nombre de familia estable para SF Rounded, así que se pide
+    /// el descriptor `.rounded` del sistema y se lee su nombre real, igual que hace
+    /// `Shell.swift` con `.font(.system(design: .rounded))`. Si el sistema no lo sirve
+    /// (nunca debería en iOS 13+), cae a Avenir Next en vez de fallar en silencio.
+    private static func sfRoundedFontName(weight: UIFont.Weight) -> String {
+        let system = UIFont.systemFont(ofSize: 20, weight: weight)
+        guard let roundedDescriptor = system.fontDescriptor.withDesign(.rounded) else {
+            assertionFailure("SF Rounded no disponible: usando Avenir Next de respaldo")
+            return "AvenirNext-Bold"
+        }
+        let rounded = UIFont(descriptor: roundedDescriptor, size: 20)
+        assert(UIFont(name: rounded.fontName, size: 20) != nil,
+               "SKLabelNode no podrá cargar la fuente \(rounded.fontName)")
+        return rounded.fontName
+    }
 
     init(size: CGSize, haptics: any HapticsEngine, model: AppModel, settings: GameSettings) {
         self.haptics = haptics
@@ -335,6 +352,9 @@ final class GameScene: SKScene {
         // Oculto fuera de la partida: en el menú era un "0" gigante flotando sobre
         // la tarjeta sin significar nada, y en el game over duplicaba al de la ficha.
         scoreLabel.alpha = 0
+        // Por encima de flores (z20) y velo (z10): sin esto el empate de zPosition=0
+        // con worldNode (añadido después) lo enterraba bajo el propio juego.
+        scoreLabel.zPosition = 30
         cameraNode.addChild(scoreLabel)
 
         // El velo se dibuja generoso porque `.aspectFill` recorta distinto en cada
@@ -357,7 +377,7 @@ final class GameScene: SKScene {
         blindNoticeLabel.position = CGPoint(x: 0, y: Tuning.HUD.blindNoticeOffsetY)
         blindNoticeLabel.text = "a ciegas · fíate del tacto"
         blindNoticeLabel.alpha = 0
-        blindNoticeLabel.zPosition = 11
+        blindNoticeLabel.zPosition = 30
         cameraNode.addChild(blindNoticeLabel)
     }
 
@@ -674,6 +694,12 @@ final class GameScene: SKScene {
     /// Fire-and-forget: el motor háptico es un actor y no puede bloquear el frame.
     /// Si un pulso llega dos milisegundos tarde no pasa nada; si el frame se pierde,
     /// sí.
+    ///
+    /// El OR ya no decide qué canal suena —eso hacía que apagar los hápticos con el
+    /// sonido encendido siguiera vibrando—: hoy es solo un atajo para no cruzar al
+    /// actor cuando los dos canales están apagados. Quien filtra hápticos y audio por
+    /// separado es el motor, que es también quien gobierna el bucle de proximidad y
+    /// la textura de alineación (`setChannels`, empujado desde `RootView`).
     private func emit(_ signal: HapticSignal) {
         guard settings.hapticsEnabled || settings.audioEnabled else { return }
         let haptics = self.haptics

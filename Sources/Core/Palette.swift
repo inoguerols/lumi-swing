@@ -23,7 +23,9 @@ enum Palette {
     /// Las dos capas de vegetación del fondo. La lejana casi se confunde con el
     /// cielo; la cercana recorta contra él. Esa diferencia es la profundidad.
     static let canopyFar = SKColor(red: 0.17, green: 0.34, blue: 0.29, alpha: 1)
-    static let canopyNear = SKColor(red: 0.09, green: 0.21, blue: 0.19, alpha: 1)
+    /// Más clara que `trunk`/`bark`: es decoración, no letal, y la regla de Alto's
+    /// (silueta oscura = peligro) exige que lo que mata sea lo más oscuro de la escena.
+    static let canopyNear = SKColor(red: 0.12, green: 0.26, blue: 0.23, alpha: 1)
 
     /// La luna: de dónde viene la luz. Sin ella el verde del cielo era un color
     /// plano sin causa; con ella hay una fuente, y la escena tiene dirección.
@@ -51,18 +53,22 @@ enum Palette {
 
     // MARK: - El mundo sólido
 
-    static let trunk = SKColor(red: 0.10, green: 0.16, blue: 0.14, alpha: 1)
+    /// Lo letal es lo más oscuro de la escena (regla de Alto's Odyssey: silueta
+    /// oscura en primer plano = peligro). Antes contrastaba MENOS con el cielo que
+    /// `canopyNear`, que es pura decoración — jerarquía tonal invertida.
+    static let trunk = SKColor(red: 0.05, green: 0.09, blue: 0.08, alpha: 1)
     static let trunkEdge = SKColor(red: 0.18, green: 0.28, blue: 0.24, alpha: 1)
     /// El canto del tronco que mira a la luna. Un rectángulo de un solo color es
     /// una barra; con un lado iluminado es madera.
     static let trunkLit = SKColor(red: 0.19, green: 0.31, blue: 0.27, alpha: 1)
-    /// Vetas de corteza. Apenas se notan de cerca y son justo lo que separa una
-    /// superficie de un relleno.
-    static let bark = SKColor(red: 0.06, green: 0.11, blue: 0.10, alpha: 1)
+    /// Vetas de corteza, casi negras: apenas se notan de cerca y son justo lo que
+    /// separa una superficie de un relleno.
+    static let bark = SKColor(red: 0.02, green: 0.04, blue: 0.03, alpha: 1)
     static let grass = SKColor(red: 0.13, green: 0.28, blue: 0.22, alpha: 1)
     static let leaf = SKColor(red: 0.11, green: 0.24, blue: 0.20, alpha: 1)
-    /// Musgo lunar en los bordes del hueco: señala la puerta, no la pared.
-    static let moss = SKColor(red: 0.42, green: 0.62, blue: 0.45, alpha: 1)
+    /// Musgo lunar en los bordes del hueco: aclarado para que señale la puerta con
+    /// más fuerza frente al tronco, ahora más oscuro.
+    static let moss = SKColor(red: 0.50, green: 0.72, blue: 0.52, alpha: 1)
     static let ground = SKColor(red: 0.05, green: 0.10, blue: 0.09, alpha: 1)
 
     // MARK: - Nombres que usa el HUD
