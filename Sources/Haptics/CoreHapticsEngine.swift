@@ -19,6 +19,7 @@ actor CoreHapticsEngine: HapticsEngine {
     private var alignmentActive = false
     private var currentCue: ProximityCue?
     private var proximityLoop: Task<Void, Never>?
+    private var ensureTask: Task<Void, Never>?
 
     private let audio = AudioCueEngine()
     private(set) var resetCount = 0
@@ -97,6 +98,22 @@ actor CoreHapticsEngine: HapticsEngine {
     /// Idempotente y barata cuando ya está todo en pie, así que se llama al volver a
     /// primer plano y también como guard perezoso antes de cada señal.
     func ensureRunning() async {
+        // Single-flight: scenePhase, el stoppedHandler y los guards perezosos de
+        // play()/runProximityLoop() pueden llamar aquí a la vez, y el cuerpo tiene
+        // puntos de suspensión antes de escribir `isRunning`. Dos vuelos solapados
+        // duplicaban el bucle de proximidad o dejaban `isRunning=false` con el motor
+        // arrancado — el mismo bug que este método existe para arreglar.
+        if let inFlight = ensureTask {
+            await inFlight.value
+            return
+        }
+        let task = Task { await ensureRunningBody() }
+        ensureTask = task
+        await task.value
+        ensureTask = nil
+    }
+
+    private func ensureRunningBody() async {
         if let hardwareStartOverride {
             if !isRunning { isRunning = hardwareStartOverride() }
             return
@@ -147,8 +164,9 @@ actor CoreHapticsEngine: HapticsEngine {
             try loadPlayers(on: engine)
             isRunning = true
             // Si el jugador estaba dentro de una zona a ciegas, el mapa vuelve solo:
-            // `currentCue` sigue en pie y el bucle lo retoma.
-            if currentCue != nil { startProximityLoop() }
+            // `currentCue` sigue en pie y el bucle lo retoma. El guard evita duplicar
+            // el bucle si un `ensureRunning()` concurrente ya lo levantó.
+            if currentCue != nil, proximityLoop == nil { startProximityLoop() }
         } catch {
             isRunning = false
         }
