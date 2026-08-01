@@ -1,0 +1,204 @@
+{
+  "sourceLanguage": "es",
+  "strings": {
+    "Accesibilidad": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accessibility"
+          }
+        }
+      }
+    },
+    "Ajustes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        }
+      }
+    },
+    "Clasificación": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leaderboard"
+          }
+        }
+      }
+    },
+    "En las zonas a ciegas los muros no se ven: el ritmo de las vibraciones dice a qué distancia está el muro, y una textura continua avisa de que pasas por el hueco.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In blind zones the walls are invisible: the rhythm of the vibrations tells you how far away the wall is, and a continuous texture warns you when you're passing through the gap."
+          }
+        }
+      }
+    },
+    "Hápticos": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haptics"
+          }
+        }
+      }
+    },
+    "Jugar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play"
+          }
+        }
+      }
+    },
+    "Listo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
+    },
+    "Lumi Swing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lumi Swing"
+          }
+        }
+      }
+    },
+    "Mantén pulsado para agarrarte a una flor.\nSuelta para salir volando.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hold to grab onto a flower.\nLet go to fly off."
+          }
+        }
+      }
+    },
+    "Menú": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu"
+          }
+        }
+      }
+    },
+    "Otra vez": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Again"
+          }
+        }
+      }
+    },
+    "Reducir parpadeos": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reduce flashing"
+          }
+        }
+      }
+    },
+    "Récord: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Best: %lld"
+          }
+        }
+      }
+    },
+    "Sonido": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sound"
+          }
+        }
+      }
+    },
+    "Ver los muros a ciegas": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show walls in blind zones"
+          }
+        }
+      }
+    },
+    "a ciegas · fíate del tacto": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "blind zone · trust your touch"
+          }
+        }
+      }
+    },
+    "¡tu mejor marca!": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "new best!"
+          }
+        }
+      }
+    },
+    "«Ver los muros a ciegas» mantiene la penumbra y la puntuación doble, pero deja los muros con un contorno tenue. Si apagas los hápticos se activa solo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Show walls in blind zones” keeps the dimness and the double score, but leaves the walls with a faint outline. It turns on automatically if you turn off haptics."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

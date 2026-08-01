@@ -457,7 +457,7 @@ final class GameScene: SKScene {
         blindNoticeLabel.fontSize = Tuning.HUD.deathFontSize
         blindNoticeLabel.fontColor = Palette.rope
         blindNoticeLabel.position = CGPoint(x: 0, y: Tuning.HUD.blindNoticeOffsetY)
-        blindNoticeLabel.text = "a ciegas · fíate del tacto"
+        blindNoticeLabel.text = String(localized: "a ciegas · fíate del tacto")
         blindNoticeLabel.alpha = 0
         blindNoticeLabel.zPosition = 30
         cameraNode.addChild(blindNoticeLabel)

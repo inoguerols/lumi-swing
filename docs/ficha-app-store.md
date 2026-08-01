@@ -116,3 +116,74 @@ Orden recomendado (Apple muestra las tres primeras en los resultados de búsqued
 
 Conviene añadirles un rótulo corto encima (Apple lo permite y sube la conversión):
 «Un dedo», «A ciegas, solo con el tacto», «Ranking semanal».
+
+## Localización en-US
+
+App Store Connect permite varias localizaciones de la ficha con las mismas
+capturas (no llevan texto incrustado). Añadir **English (U.S.)** con esto:
+
+| Campo | Valor |
+|---|---|
+| **Nombre** (máx. 30) | `Lumi Swing` |
+| **Subtítulo** (máx. 30) | `Swing the light through the dark` |
+
+### Keywords
+
+```
+swing,vine,firefly,arcade,one tap,reflexes,haptic,vibration,night,jungle,high score,casual
+```
+
+### Description
+
+```
+You're a firefly in a midnight jungle.
+
+Hold to grab a vine to the nearest moonflower. Let go and fly off with the
+momentum. One finger, nothing else.
+
+BLIND ZONES
+Every few gates, the undergrowth swallows the light and the trunks vanish.
+From there it's touch only: the rhythm of the vibrations tells you how far
+the wall is, and a continuous texture warns you when you're level with the
+gap.
+
+You can beat it with the screen face down. And those gates count double.
+
+WHAT YOU WON'T FIND
+· No ads
+· No in-app purchases
+· No lives, no waiting
+· No sign-up
+· Works offline
+
+ACCESSIBLE
+Can't feel the haptics? Turn on "Show walls in blind zones" in Settings: blind
+zones keep the dimness and the double score, but the trunks keep a faint
+outline. The game can be finished without relying on touch.
+
+Global leaderboard on Game Center, with a weekly ranking: it resets every
+Monday, so everyone gets a fresh shot.
+```
+
+### What's new (1.0)
+
+```
+First release. Let go.
+```
+
+### Notes for Apple's review team
+
+```
+Single-input game, no accounts or purchases. No sign-in required.
+
+About Game Center: the leaderboard is optional; if the reviewer isn't signed
+in, the game still works and saves the record locally.
+
+The signature mechanic is "blind zones": stretches where obstacles turn
+invisible and the player is guided by Core Haptics. Testing on Simulator (no
+Taptic Engine) falls back automatically to an audio substitute plus a faint
+outline of the obstacles, so it stays playable there too. Judging it as
+designed needs a physical device.
+
+No user data is collected.
+```

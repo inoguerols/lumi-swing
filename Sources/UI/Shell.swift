@@ -106,7 +106,7 @@ struct FireflySwarm: View {
 /// Botón principal: relleno cálido con degradado y halo, en vez del azul de
 /// sistema. Es el único elemento que pide ser pulsado, y tiene que notarse.
 private struct PrimaryButton: View {
-    let title: String
+    let title: LocalizedStringKey
     let action: () -> Void
 
     var body: some View {
@@ -254,9 +254,13 @@ struct SettingsView: View {
                     Toggle("Hápticos", isOn: $settings.hapticsEnabled)
                     Toggle("Sonido", isOn: $settings.audioEnabled)
                 } footer: {
-                    Text("En las zonas a ciegas los muros no se ven: el ritmo de las "
-                         + "vibraciones dice a qué distancia está el muro, y una "
-                         + "textura continua avisa de que pasas por el hueco.")
+                    // Literal único (no `+`): la concatenación de Strings pierde el tipo
+                    // LocalizedStringKey y el texto sale sin pasar por el catálogo.
+                    Text("""
+                        En las zonas a ciegas los muros no se ven: el ritmo de las \
+                        vibraciones dice a qué distancia está el muro, y una \
+                        textura continua avisa de que pasas por el hueco.
+                        """)
                 }
 
                 Section {
@@ -266,9 +270,11 @@ struct SettingsView: View {
                     Text("Accesibilidad")
                 } footer: {
                     // El juego tiene que poder terminarse sin depender del tacto.
-                    Text("«Ver los muros a ciegas» mantiene la penumbra y la "
-                         + "puntuación doble, pero deja los muros con un contorno "
-                         + "tenue. Si apagas los hápticos se activa solo.")
+                    Text("""
+                        «Ver los muros a ciegas» mantiene la penumbra y la \
+                        puntuación doble, pero deja los muros con un contorno \
+                        tenue. Si apagas los hápticos se activa solo.
+                        """)
                 }
 
                 Section {
