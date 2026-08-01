@@ -465,6 +465,20 @@ enum Tuning {
         /// Hasta dónde llega la luz de la luciérnaga en las zonas a ciegas.
         static let lightHoleRadius: CGFloat = 230
 
+        /// Silueta tallada del tronco (F5): cada cuánto aparece una muesca de
+        /// corteza a lo largo del canto vertical, y cuánto muerde hacia dentro.
+        /// Todo el rango cabe con holgura dentro de `World.wallThickness` (46),
+        /// para que la muesca más profunda + el canto lunar nunca se crucen.
+        static let trunkNotchSpacing: CGFloat = 70
+        static let trunkNotchDepthMin: CGFloat = 3
+        static let trunkNotchDepthMax: CGFloat = 7
+        /// Fracción del grosor del tronco que ocupa el canto lunar.
+        static let trunkLitWidthFraction: CGFloat = 0.32
+        /// Nudos de corteza por tronco: pura decoración, jamás toca el borde.
+        static let trunkKnotCount: Int = 1
+        /// Cuánto se aleja el muñón de rama del canto que da al hueco.
+        static let trunkStumpMargin: CGFloat = 34
+
         /// La flor: corola, núcleo y el tallo del que cuelga.
         static let flowerPetalCount: Int = 5
         static let flowerPetalLength: CGFloat = 17

@@ -771,27 +771,27 @@ final class GameScene: SKScene {
             (wall.gapTopY, Tuning.World.ceilingY)
         ]
         var rng = SplitMix64(seed: UInt64(bitPattern: Int64(chunk.index)) &* 0x9E37_79B9)
-        for (bottom, top) in segments where top > bottom {
+        // El segmento de abajo da al hueco por su canto superior; el de arriba, por
+        // el inferior. `makeTrunk` necesita saberlo para poner el muñón de rama en
+        // el lado correcto.
+        let gapFacesTop = [true, false]
+        for (index, (bottom, top)) in segments.enumerated() where top > bottom {
             walls.addChild(makeTrunk(rect: CGRect(x: wall.x - thickness / 2,
                                                   y: bottom,
                                                   width: thickness,
                                                   height: top - bottom),
+                                     gapFacesTop: gapFacesTop[index],
                                      rng: &rng))
         }
 
         // Musgo lunar en los dos bordes del hueco. Señala la **puerta**, no la pared:
-        // el ojo se va a donde hay que ir. Se dibuja hacia dentro del tronco, nunca
-        // fuera, para no mentir sobre dónde está la colisión.
-        for edgeY in [wall.gapBottomY, wall.gapTopY] {
-            let moss = SKShapeNode(rect: CGRect(x: wall.x - thickness / 2,
-                                                y: edgeY - Self.mossThickness / 2,
-                                                width: thickness,
-                                                height: Self.mossThickness))
-            moss.fillColor = Palette.moss
-            moss.strokeColor = .clear
-            moss.alpha = 0.8
-            moss.glowWidth = 3
-            walls.addChild(moss)
+        // el ojo se va a donde hay que ir. Crece hacia dentro del tronco —nunca
+        // hacia el hueco—, con un canto irregular y un par de matas colgando.
+        let minX = wall.x - thickness / 2
+        let maxX = wall.x + thickness / 2
+        for (edgeY, intoTrunk) in [(wall.gapBottomY, CGFloat(1)), (wall.gapTopY, CGFloat(-1))] {
+            walls.addChild(makeMossLip(edgeY: edgeY, minX: minX, maxX: maxX,
+                                       intoTrunk: intoTrunk, rng: &rng))
         }
         walls.alpha = wallAlpha(for: chunk)
         container.addChild(walls)
@@ -865,37 +865,65 @@ final class GameScene: SKScene {
         return node
     }
 
-    /// Un tronco, no una barra.
+    /// Un tronco tallado, no una barra.
     ///
-    /// Todo el dibujo cae **dentro** del rectángulo de colisión: el canto iluminado,
-    /// las vetas y el redondeo van hacia dentro, nunca sobresalen. Lo que se ve tiene
-    /// que ser exactamente lo que mata (pilar 2 del GDD), así que la decoración puede
-    /// quitar superficie visual pero jamás añadirla.
-    private func makeTrunk(rect: CGRect, rng: inout SplitMix64) -> SKNode {
+    /// Todo el dibujo cae **dentro** del rectángulo de colisión: la silueta muerde
+    /// hacia dentro con muescas de corteza, el canto iluminado sigue ese mismo borde
+    /// irregular, y el muñón de rama y los nudos son masa que ya estaba ahí, nunca
+    /// añadida fuera. Lo que se ve tiene que ser exactamente lo que mata (pilar 2 del
+    /// GDD): la decoración solo puede quitar superficie, jamás añadirla.
+    private func makeTrunk(rect: CGRect, gapFacesTop: Bool, rng: inout SplitMix64) -> SKNode {
         let node = SKNode()
 
-        let body = SKShapeNode(rect: rect, cornerRadius: 5)
+        // Los dos cantos verticales, tallados con muescas deterministas por chunk.
+        let leftEdge = carvedEdge(x: rect.minX, from: rect.minY, to: rect.maxY, inward: 1, rng: &rng)
+        let rightEdge = carvedEdge(x: rect.maxX, from: rect.maxY, to: rect.minY, inward: -1, rng: &rng)
+
+        let bodyPath = CGMutablePath()
+        bodyPath.move(to: leftEdge[0])
+        for point in leftEdge.dropFirst() { bodyPath.addLine(to: point) }
+        for point in rightEdge { bodyPath.addLine(to: point) }
+        bodyPath.closeSubpath()
+
+        let body = SKShapeNode(path: bodyPath)
         body.fillColor = Palette.trunk
         body.strokeColor = Palette.trunkEdge
         body.lineWidth = 2
+        body.lineJoin = .round
         node.addChild(body)
 
-        // El canto que mira a la luna, que está arriba a la izquierda.
-        let lit = SKShapeNode(rect: CGRect(x: rect.minX + 2,
-                                           y: rect.minY + 2,
-                                           width: rect.width * 0.28,
-                                           height: rect.height - 4),
-                              cornerRadius: 3)
+        // El canto que mira a la luna sigue el mismo borde tallado que el cuerpo,
+        // no un rectángulo limpio — es la misma corteza, solo que iluminada.
+        let litWidth = rect.width * Tuning.Scenery.trunkLitWidthFraction
+        let litEdge = leftEdge.map { CGPoint(x: $0.x + 2, y: $0.y) }
+        let litPath = CGMutablePath()
+        litPath.move(to: litEdge[0])
+        for point in litEdge.dropFirst() { litPath.addLine(to: point) }
+        litPath.addLine(to: CGPoint(x: rect.minX + litWidth, y: rect.maxY))
+        litPath.addLine(to: CGPoint(x: rect.minX + litWidth, y: rect.minY))
+        litPath.closeSubpath()
+        let lit = SKShapeNode(path: litPath)
         lit.fillColor = Palette.trunkLit
         lit.strokeColor = .clear
         lit.alpha = 0.75
         node.addChild(lit)
 
+        // Nudos de corteza: marcas deterministas, siempre bien dentro del cuerpo.
+        for _ in 0..<Tuning.Scenery.trunkKnotCount {
+            let knot = SKShapeNode(circleOfRadius: rng.nextCGFloat(in: 3...6))
+            knot.position = CGPoint(x: rng.nextCGFloat(in: (rect.minX + litWidth + 6)...(rect.maxX - 8)),
+                                    y: rng.nextCGFloat(in: (rect.minY + 14)...(rect.maxY - 14)))
+            knot.fillColor = Palette.bark
+            knot.strokeColor = .clear
+            knot.alpha = 0.6
+            node.addChild(knot)
+        }
+
         // Vetas: líneas verticales quebradas, con la semilla del chunk para que el
         // mismo tronco tenga siempre la misma corteza.
         for _ in 0..<3 {
             let path = CGMutablePath()
-            let x = rng.nextCGFloat(in: (rect.minX + 10)...(rect.maxX - 8))
+            let x = rng.nextCGFloat(in: (rect.minX + litWidth + 4)...(rect.maxX - 8))
             var y = rect.minY + rng.nextCGFloat(in: 0...80)
             path.move(to: CGPoint(x: x, y: y))
             while y < rect.maxY {
@@ -907,6 +935,101 @@ final class GameScene: SKScene {
             vein.lineWidth = 2.5
             vein.alpha = 0.55
             node.addChild(vein)
+        }
+
+        // Muñón de rama, hacia dentro, cerca del hueco: la puerta no es un corte
+        // limpio, es donde el árbol perdió una rama. Nunca cruza el canto del hueco.
+        let gapY = gapFacesTop ? rect.maxY : rect.minY
+        let stumpSign: CGFloat = gapFacesTop ? -1 : 1
+        let stumpY = gapY + stumpSign * min(Tuning.Scenery.trunkStumpMargin, rect.height * 0.3)
+        let stumpBase = rect.minX + litWidth + 6
+        let stumpLength = rect.width * 0.24
+        let stump = SKShapeNode(rect: CGRect(x: stumpBase, y: stumpY - 4, width: stumpLength, height: 8),
+                                cornerRadius: 3)
+        stump.fillColor = Palette.bark
+        stump.strokeColor = .clear
+        stump.alpha = 0.8
+        node.addChild(stump)
+        let stumpCap = SKShapeNode(circleOfRadius: 5)
+        stumpCap.position = CGPoint(x: stumpBase + stumpLength, y: stumpY)
+        stumpCap.fillColor = Palette.trunkLit
+        stumpCap.strokeColor = .clear
+        stumpCap.alpha = 0.55
+        node.addChild(stumpCap)
+
+        return node
+    }
+
+    /// Puntos de un canto vertical del tronco, con muescas de corteza que muerden
+    /// **hacia dentro** (`inward` es el signo hacia el centro del tronco) a
+    /// intervalos deterministas. Nunca se sale de `x`, así que la silueta resultante
+    /// siempre cabe dentro del rectángulo de colisión original.
+    private func carvedEdge(x: CGFloat, from yStart: CGFloat, to yEnd: CGFloat,
+                            inward: CGFloat, rng: inout SplitMix64) -> [CGPoint] {
+        var points = [CGPoint(x: x, y: yStart)]
+        let length = abs(yEnd - yStart)
+        let direction: CGFloat = yEnd > yStart ? 1 : -1
+        let notchCount = max(2, Int(length / Tuning.Scenery.trunkNotchSpacing))
+        let step = length / CGFloat(notchCount)
+        var y = yStart
+        for _ in 0..<notchCount {
+            let notchY = y + direction * step * rng.nextCGFloat(in: 0.35...0.65)
+            let depth = rng.nextCGFloat(in: Tuning.Scenery.trunkNotchDepthMin...Tuning.Scenery.trunkNotchDepthMax)
+            points.append(CGPoint(x: x, y: notchY - direction * step * 0.15))
+            points.append(CGPoint(x: x + inward * depth, y: notchY))
+            points.append(CGPoint(x: x, y: notchY + direction * step * 0.15))
+            y += direction * step
+        }
+        points.append(CGPoint(x: x, y: yEnd))
+        return points
+    }
+
+    /// El labio de musgo de un borde del hueco: un canto recto justo en `edgeY`
+    /// (nunca lo cruza, para no asomar mole opaca al hueco) con un relieve
+    /// irregular que muerde hacia dentro del tronco, más un par de matas colgando.
+    /// Solo el `glowWidth` —difuminado, no masa— puede leerse fuera de `edgeY`.
+    private func makeMossLip(edgeY: CGFloat, minX: CGFloat, maxX: CGFloat,
+                             intoTrunk: CGFloat, rng: inout SplitMix64) -> SKNode {
+        let node = SKNode()
+        let width = maxX - minX
+        let segments = 4
+        let step = width / CGFloat(segments)
+
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: minX, y: edgeY))
+        for index in 0..<segments {
+            let depth = rng.nextCGFloat(in: (Self.mossThickness * 0.5)...(Self.mossThickness * 1.5))
+            let x0 = minX + CGFloat(index) * step
+            let x1 = x0 + step
+            path.addQuadCurve(to: CGPoint(x: x1, y: edgeY - intoTrunk * depth),
+                              control: CGPoint(x: x0 + step / 2, y: edgeY - intoTrunk * depth))
+        }
+        path.addLine(to: CGPoint(x: maxX, y: edgeY))
+        path.closeSubpath()
+
+        let lip = SKShapeNode(path: path)
+        lip.fillColor = Palette.moss
+        lip.strokeColor = .clear
+        lip.alpha = 0.8
+        lip.glowWidth = 4
+        node.addChild(lip)
+
+        // 2-3 matas colgando, siempre hacia dentro del grosor del tronco.
+        let tuftCount = Int(rng.nextCGFloat(in: 2...3.99))
+        for _ in 0..<tuftCount {
+            let tx = rng.nextCGFloat(in: (minX + 6)...(maxX - 6))
+            let length = rng.nextCGFloat(in: (Self.mossThickness * 1.5)...(Self.mossThickness * 3))
+            let tuftPath = CGMutablePath()
+            tuftPath.move(to: CGPoint(x: tx, y: edgeY))
+            tuftPath.addQuadCurve(to: CGPoint(x: tx + rng.nextCGFloat(in: -4...4),
+                                              y: edgeY - intoTrunk * length),
+                                  control: CGPoint(x: tx + rng.nextCGFloat(in: -3...3),
+                                                   y: edgeY - intoTrunk * length * 0.5))
+            let tuft = SKShapeNode(path: tuftPath)
+            tuft.strokeColor = Palette.moss
+            tuft.lineWidth = 2.5
+            tuft.alpha = 0.7
+            node.addChild(tuft)
         }
 
         return node
