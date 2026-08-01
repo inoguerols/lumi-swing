@@ -455,6 +455,9 @@ enum Tuning {
         /// pegadas al cristal.
         static let parallaxFar: CGFloat = 0.20
         static let parallaxNear: CGFloat = 0.45
+        /// La luna, mucho más lejos que el dosel: apenas se mueve, pero se mueve.
+        /// Antes clavada a la cámara — ahora el run deja memoria visual (F6).
+        static let parallaxMoon: CGFloat = 0.05
 
         static let canopyFarHeight: CGFloat = 460
         static let canopyNearHeight: CGFloat = 320
@@ -492,6 +495,20 @@ enum Tuning {
         static let trunkKnotCount: Int = 1
         /// Cuánto se aleja el muñón de rama del canto que da al hueco.
         static let trunkStumpMargin: CGFloat = 34
+
+        /// Silueta tallada de las losas de suelo y techo (F6): mismo principio que
+        /// el tronco —el borde que mira al área jugable muerde hacia dentro de la
+        /// losa, nunca cruza `floorY`/`ceilingY`—, pero con una separación mayor y
+        /// mordiscos más profundos: aquí lee como hierba y raíces vistas de lejos,
+        /// no como corteza de cerca.
+        static let boundsEdgeSpacing: CGFloat = 160
+        static let boundsEdgeDepthMin: CGFloat = 20
+        static let boundsEdgeDepthMax: CGFloat = 60
+
+        /// Cuánto tarda el cielo del menú en completar un ciclo. En partida el
+        /// ciclo lo marca el nº de muro (`Feel.paletteCycleWalls`); en el menú no
+        /// hay muros que contar, así que aquí manda el tiempo real (F6).
+        static let menuSkyCycleDuration: CGFloat = 40
 
         /// La flor: corola, núcleo y el tallo del que cuelga.
         static let flowerPetalCount: Int = 5

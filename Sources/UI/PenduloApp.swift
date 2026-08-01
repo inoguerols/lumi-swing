@@ -23,6 +23,7 @@ struct RootView: View {
     @State private var showingDebug = false
     @State private var showingSettings = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init() {
         // Un único motor háptico para toda la app, compartido por la escena y por la
@@ -62,7 +63,7 @@ struct RootView: View {
                          onSettings: { showingSettings = true },
                          onLeaderboard: { GameCenter.show(.week) },
                          onSecretDebug: { showingDebug = true })
-                    .transition(.opacity)
+                    .transition(menuTransition)
 
             case .playing:
                 EmptyView()
@@ -109,6 +110,18 @@ struct RootView: View {
                 startRun()
             }
         }
+    }
+
+    /// La tarjeta del menú entra con un golpe de muelle, no con un fundido plano:
+    /// es la primera imagen del juego y un `.opacity` no cuenta nada. Con Reduce
+    /// Motion se cae a un fundido corto, sin escala.
+    private var menuTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .asymmetric(
+                insertion: .scale(scale: 0.85).combined(with: .opacity)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.7)),
+                removal: .opacity)
     }
 
     private func startRun() {

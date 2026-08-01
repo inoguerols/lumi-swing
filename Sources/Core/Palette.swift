@@ -74,7 +74,14 @@ enum Palette {
     /// Musgo lunar en los bordes del hueco: aclarado para que señale la puerta con
     /// más fuerza frente al tronco, ahora más oscuro.
     static let moss = SKColor(red: 0.50, green: 0.72, blue: 0.52, alpha: 1)
-    static let ground = SKColor(red: 0.05, green: 0.10, blue: 0.09, alpha: 1)
+
+    /// Losas de suelo y techo (F6). Antes un único `ground` casi negro que,
+    /// enteras y sin talla, se leían como bandas de letterbox. Con el borde
+    /// tallado (`carvedGroundEdge`) y un matiz de sustrato en vez de negro
+    /// puro leen como tierra/raíces y dosel apretado — sin dejar de ser lo
+    /// más oscuro de la escena (letal, regla de Alto's).
+    static let groundSlab = SKColor(red: 0.07, green: 0.12, blue: 0.10, alpha: 1)
+    static let canopySlab = SKColor(red: 0.06, green: 0.12, blue: 0.13, alpha: 1)
 
     // MARK: - Nombres que usa el HUD
 

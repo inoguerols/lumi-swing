@@ -140,6 +140,10 @@ struct MenuView: View {
     let onSecretDebug: () -> Void
 
     @State private var titleTaps = 0
+    /// Latido sutil del título: el menú tiene que sentirse vivo antes de que se
+    /// toque nada (F6). Con Reduce Motion se queda quieto.
+    @State private var titlePulsing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Card {
@@ -148,6 +152,13 @@ struct MenuView: View {
                     .gameTitle()
                     .foregroundStyle(fireflyAmber)
                     .shadow(color: fireflyAmber.opacity(0.5), radius: 24)
+                    .scaleEffect(titlePulsing ? 1.03 : 1.0)
+                    .onAppear {
+                        guard !reduceMotion else { return }
+                        withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+                            titlePulsing = true
+                        }
+                    }
                     .onTapGesture {
                         titleTaps += 1
                         guard titleTaps >= 5 else { return }

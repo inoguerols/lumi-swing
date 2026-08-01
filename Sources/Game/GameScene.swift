@@ -35,6 +35,10 @@ final class GameScene: SKScene {
     private let canopyFarNode = SKNode()
     private let canopyNearNode = SKNode()
     private let pollenNode = SKNode()
+    /// La luna. Ya no clavada a la cámara (F6): `updateParallax` la mueve una
+    /// fracción mínima de lo que se mueve la cámara, partiendo de esta posición.
+    private let moonNode = SKNode()
+    private var moonHomePosition = CGPoint.zero
 
     /// Latido del abdomen, sincronizado con el háptico de proximidad.
     private var blinkTimer: CGFloat = 0
@@ -192,13 +196,13 @@ final class GameScene: SKScene {
         disc.strokeColor = .clear
         disc.glowWidth = Tuning.Scenery.moonRadius * 0.6
 
-        let moon = SKNode()
-        moon.addChild(halo)
-        moon.addChild(disc)
-        moon.position = CGPoint(x: Tuning.World.sceneWidth * 0.30,
-                                y: height * 0.5 - Tuning.Scenery.moonRadius * 3)
-        moon.zPosition = -95
-        cameraNode.addChild(moon)
+        moonNode.addChild(halo)
+        moonNode.addChild(disc)
+        moonHomePosition = CGPoint(x: Tuning.World.sceneWidth * 0.30,
+                                   y: height * 0.5 - Tuning.Scenery.moonRadius * 3)
+        moonNode.position = moonHomePosition
+        moonNode.zPosition = -95
+        cameraNode.addChild(moonNode)
     }
 
     /// Dos copias de la silueta, una al lado de otra: al desplazarse por parallax
@@ -265,6 +269,9 @@ final class GameScene: SKScene {
         canopyNearNode.position = CGPoint(
             x: -camera.x * Tuning.Scenery.parallaxNear,
             y: -camera.y * Tuning.Scenery.parallaxNear * 0.3)
+        moonNode.position = CGPoint(
+            x: moonHomePosition.x - camera.x * Tuning.Scenery.parallaxMoon,
+            y: moonHomePosition.y - camera.y * Tuning.Scenery.parallaxMoon * 0.3)
     }
 
     // MARK: - La luciérnaga
@@ -406,6 +413,18 @@ final class GameScene: SKScene {
         }
     }
 
+    /// Fuera de partida (menú, game over) no hay física que avanzar, pero el
+    /// mundo detrás no puede quedarse congelado (F6): el halo late, los tallos
+    /// ondulan y el cielo sigue su propio ciclo por tiempo real en vez del ciclo
+    /// por muro de `updateSky()`, que aquí no tiene muros que contar.
+    private func updateMenuAmbience(dt: CGFloat, time: TimeInterval) {
+        updateBlink(dt: dt)
+        swayStems(time: time)
+        let phase = (time.truncatingRemainder(dividingBy: TimeInterval(Tuning.Scenery.menuSkyCycleDuration)))
+            / TimeInterval(Tuning.Scenery.menuSkyCycleDuration)
+        backgroundColor = Palette.sky(at: CGFloat(phase))
+    }
+
     /// El HUD cuelga de la cámara, así que viaja con ella sin recolocarse por frame.
     private func buildHUD() {
         scoreLabel.fontSize = Tuning.HUD.scoreFontSize
@@ -457,6 +476,10 @@ final class GameScene: SKScene {
         // salto de cámara roto.
         if let previous = lastUpdateTime, model.phase != .playing {
             settleShake(dt: CGFloat(currentTime - previous))
+            // Sin física que avanzar, el mundo detrás del menú no puede quedarse
+            // congelado (F6): tallos, halo y cielo siguen su curso propio. Nada
+            // de esto toca `simulation` ni el HUD, así que no rompe el game over.
+            updateMenuAmbience(dt: CGFloat(currentTime - previous), time: currentTime)
         }
         guard model.phase == .playing else { return }
         guard let lastUpdateTime else { return }
@@ -1229,23 +1252,73 @@ final class GameScene: SKScene {
         return lerp(1, hidden, darkness)
     }
 
+    /// Las losas de suelo y techo, con el borde que mira al área jugable tallado
+    /// hacia dentro (F6) en vez de un canto recto: era eso, y no el letterboxing,
+    /// lo que se leía como una banda muerta entrando entera en pantalla con
+    /// `.aspectFill`. La hitbox (`floorY`/`ceilingY`) no cambia — el tallado solo
+    /// resta superficie, nunca la añade (pilar 2 del GDD).
     private func buildBounds() {
-        let bars = [
-            CGRect(x: 0,
-                   y: Tuning.World.floorY - Tuning.World.boundsThickness,
-                   width: Tuning.World.worldLength,
-                   height: Tuning.World.boundsThickness),
-            CGRect(x: 0,
-                   y: Tuning.World.ceilingY,
-                   width: Tuning.World.worldLength,
-                   height: Tuning.World.boundsThickness)
-        ]
-        for rect in bars {
-            let node = SKShapeNode(rect: rect)
-            node.fillColor = Palette.ground
-            node.strokeColor = Palette.trunkEdge
-            node.lineWidth = 2
-            worldNode.addChild(node)
+        var floorRng = SplitMix64(seed: 0x6F_00_D0)
+        var ceilingRng = SplitMix64(seed: 0xCE_11_60)
+
+        let floorRect = CGRect(x: 0,
+                               y: Tuning.World.floorY - Tuning.World.boundsThickness,
+                               width: Tuning.World.worldLength,
+                               height: Tuning.World.boundsThickness)
+        let floorEdge = carvedGroundEdge(y: Tuning.World.floorY,
+                                         from: floorRect.minX, to: floorRect.maxX,
+                                         inward: -1, rng: &floorRng)
+        let floorPath = CGMutablePath()
+        floorPath.move(to: CGPoint(x: floorRect.minX, y: floorRect.minY))
+        floorPath.addLine(to: CGPoint(x: floorRect.maxX, y: floorRect.minY))
+        for point in floorEdge.reversed() { floorPath.addLine(to: point) }
+        floorPath.closeSubpath()
+        addBoundsSlab(path: floorPath, color: Palette.groundSlab)
+
+        let ceilingRect = CGRect(x: 0,
+                                 y: Tuning.World.ceilingY,
+                                 width: Tuning.World.worldLength,
+                                 height: Tuning.World.boundsThickness)
+        let ceilingEdge = carvedGroundEdge(y: Tuning.World.ceilingY,
+                                           from: ceilingRect.minX, to: ceilingRect.maxX,
+                                           inward: 1, rng: &ceilingRng)
+        let ceilingPath = CGMutablePath()
+        ceilingPath.move(to: CGPoint(x: ceilingRect.minX, y: ceilingRect.maxY))
+        ceilingPath.addLine(to: CGPoint(x: ceilingRect.maxX, y: ceilingRect.maxY))
+        for point in ceilingEdge.reversed() { ceilingPath.addLine(to: point) }
+        ceilingPath.closeSubpath()
+        addBoundsSlab(path: ceilingPath, color: Palette.canopySlab)
+    }
+
+    private func addBoundsSlab(path: CGPath, color: SKColor) {
+        let node = SKShapeNode(path: path)
+        node.fillColor = color
+        node.strokeColor = Palette.trunkEdge
+        node.lineWidth = 2
+        worldNode.addChild(node)
+    }
+
+    /// El borde horizontal de una losa (suelo o techo), tallado hacia dentro con
+    /// la misma idea que `carvedEdge` del tronco: nunca cruza `y`, así que la
+    /// hitbox queda intacta y el tallado es puro recorte. `inward` es el signo
+    /// hacia el interior de la losa (−1 hacia abajo para el suelo, +1 hacia
+    /// arriba para el techo).
+    private func carvedGroundEdge(y: CGFloat, from xStart: CGFloat, to xEnd: CGFloat,
+                                  inward: CGFloat, rng: inout SplitMix64) -> [CGPoint] {
+        var points = [CGPoint(x: xStart, y: y)]
+        let length = xEnd - xStart
+        let notchCount = max(2, Int(length / Tuning.Scenery.boundsEdgeSpacing))
+        let step = length / CGFloat(notchCount)
+        var x = xStart
+        for _ in 0..<notchCount {
+            let notchX = x + step * rng.nextCGFloat(in: 0.35...0.65)
+            let depth = rng.nextCGFloat(in: Tuning.Scenery.boundsEdgeDepthMin...Tuning.Scenery.boundsEdgeDepthMax)
+            points.append(CGPoint(x: notchX - step * 0.15, y: y))
+            points.append(CGPoint(x: notchX, y: y + inward * depth))
+            points.append(CGPoint(x: notchX + step * 0.15, y: y))
+            x += step
         }
+        points.append(CGPoint(x: xEnd, y: y))
+        return points
     }
 }
