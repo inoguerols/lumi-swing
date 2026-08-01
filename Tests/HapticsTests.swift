@@ -119,6 +119,33 @@ struct HapticsTests {
         #expect(await engine.stops == 1)
     }
 
+    /// El bug de "a veces no vibra": una llamada entrante paraba el motor y nadie lo
+    /// volvía a arrancar al volver a primer plano. Aquí se prueba la máquina de
+    /// estados, no el hardware — el simulador no tiene Taptic Engine, así que el
+    /// arranque real se sustituye por un doble inyectado.
+    @Test("Tras una interrupción, volver a primer plano rearranca el motor")
+    func engineRestartsAfterInterruption() async {
+        let engine = CoreHapticsEngine(hardwareStartOverride: { true })
+        await engine.prepare()
+        #expect(await engine.isRunning)
+
+        await engine.handleStopped(.applicationSuspended)
+        #expect(await engine.isRunning == false, "una suspensión no rearranca sola: se espera al foreground")
+
+        await engine.ensureRunning()
+        #expect(await engine.isRunning)
+    }
+
+    @Test("El guard perezoso de play() también rescata un motor parado")
+    func playRevivesStoppedEngine() async {
+        let engine = CoreHapticsEngine(hardwareStartOverride: { true })
+        await engine.prepare()
+        await engine.handleStopped(.applicationSuspended)
+
+        await engine.play(.grab)
+        #expect(await engine.isRunning)
+    }
+
     @Test("Sin Taptic Engine hay que sustituir, no solo reforzar")
     func substitutionKicksInWithoutHardware() {
         let withHardware = HapticsCapabilities(supportsHaptics: true, lowPowerMode: false)

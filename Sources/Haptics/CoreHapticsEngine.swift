@@ -24,6 +24,21 @@ actor CoreHapticsEngine: HapticsEngine {
     private(set) var resetCount = 0
     private(set) var isRunning = false
 
+    /// Los interruptores de Ajustes. Se filtran por separado a propósito: hápticos
+    /// OFF + sonido ON tiene que dar solo sonido, y hasta ahora el motor tocaba los
+    /// dos canales igual porque la escena decidía con un OR.
+    private var hapticsEnabled = true
+    private var audioEnabled = true
+
+    /// Sustituye el arranque del hardware. Solo lo usan los tests: el simulador no
+    /// tiene Taptic Engine y el ciclo de vida (interrupción → vuelta a primer plano)
+    /// hay que probarlo igual. En producción es `nil` y manda `CHHapticEngine`.
+    private let hardwareStartOverride: (@Sendable () -> Bool)?
+
+    init(hardwareStartOverride: (@Sendable () -> Bool)? = nil) {
+        self.hardwareStartOverride = hardwareStartOverride
+    }
+
     var capabilities: HapticsCapabilities {
         HapticsCapabilities(
             supportsHaptics: CHHapticEngine.capabilitiesForHardware().supportsHaptics,
@@ -41,6 +56,11 @@ actor CoreHapticsEngine: HapticsEngine {
     // MARK: - Ciclo de vida
 
     func prepare() async {
+        if let hardwareStartOverride {
+            isRunning = hardwareStartOverride()
+            return
+        }
+
         let supported = CHHapticEngine.capabilitiesForHardware().supportsHaptics
         await audio.prepare(substituting: !supported)
         guard supported else { return }
@@ -70,6 +90,54 @@ actor CoreHapticsEngine: HapticsEngine {
         }
     }
 
+    /// Rearranca lo que la interrupción se llevó. Es la respuesta al bug de "a veces
+    /// no vibra": una llamada, Siri o el auto-shutdown paraban el motor y nadie lo
+    /// volvía a arrancar (docs/lenguaje-haptico.md §7).
+    ///
+    /// Idempotente y barata cuando ya está todo en pie, así que se llama al volver a
+    /// primer plano y también como guard perezoso antes de cada señal.
+    func ensureRunning() async {
+        if let hardwareStartOverride {
+            if !isRunning { isRunning = hardwareStartOverride() }
+            return
+        }
+
+        let supported = CHHapticEngine.capabilitiesForHardware().supportsHaptics
+        // La interrupción también se lleva la AVAudioSession y el AVAudioEngine: sin
+        // esto el canal de sonido vuelve mudo aunque los hápticos revivan.
+        await audio.reactivate(substituting: !supported)
+
+        guard supported, !isRunning else { return }
+        guard let engine else {
+            // El arranque en frío falló (o nunca ocurrió): se reintenta entero.
+            await prepare()
+            return
+        }
+
+        do {
+            try await engine.start()
+            try loadPlayers(on: engine)
+            isRunning = true
+            // Si la interrupción pilló al jugador a ciegas, el mapa vuelve solo.
+            if currentCue != nil, proximityLoop == nil { startProximityLoop() }
+        } catch {
+            isRunning = false
+        }
+    }
+
+    /// Los interruptores de Ajustes, empujados desde el shell. Apagar los hápticos
+    /// tiene que callar la textura de alineación en el acto, no al siguiente evento.
+    func setChannels(haptics hapticsOn: Bool, audio audioOn: Bool) async {
+        hapticsEnabled = hapticsOn
+        audioEnabled = audioOn
+
+        if !hapticsOn, alignmentActive, let player = alignmentPlayer {
+            try? player.stop(atTime: CHHapticTimeImmediate)
+            alignmentActive = false
+        }
+        if !audioOn { await audio.stopContinuous() }
+    }
+
     private func handleReset() async {
         resetCount += 1
         alignmentActive = false
@@ -86,7 +154,9 @@ actor CoreHapticsEngine: HapticsEngine {
         }
     }
 
-    private func handleStopped(_ reason: CHHapticEngine.StoppedReason) async {
+    /// Interno, no privado, para que el test del ciclo de vida pueda provocar la
+    /// interrupción sin hardware.
+    func handleStopped(_ reason: CHHapticEngine.StoppedReason) async {
         isRunning = false
         alignmentActive = false
         proximityLoop?.cancel()
@@ -94,12 +164,12 @@ actor CoreHapticsEngine: HapticsEngine {
 
         switch reason {
         case .audioSessionInterrupt, .applicationSuspended:
-            // No se rearranca aquí: se espera a volver a primer plano. Un motor
+            // No se rearranca aquí: se espera a volver a primer plano, donde el
+            // observador de `scenePhase` llama a `ensureRunning()`. Un motor
             // reiniciado en background es un vibrador huérfano.
             break
         default:
-            try? await engine?.start()
-            isRunning = engine != nil
+            await ensureRunning()
         }
     }
 
@@ -121,7 +191,12 @@ actor CoreHapticsEngine: HapticsEngine {
         // del golpe final ensucia justo el momento que tiene que cerrar la partida.
         if signal == .death { await stopContinuous() }
 
-        await audio.play(signal)
+        if audioEnabled { await audio.play(signal) }
+
+        guard hapticsEnabled else { return }
+        // Guard perezoso: cubre el auto-shutdown y la carrera con el `stoppedHandler`
+        // sin pagar nada cuando el motor ya está vivo.
+        if !isRunning { await ensureRunning() }
         guard isRunning, let player = eventPlayers[signal] else { return }
         try? player.start(atTime: CHHapticTimeImmediate)
     }
@@ -151,9 +226,11 @@ actor CoreHapticsEngine: HapticsEngine {
     /// controla exactamente, pulso a pulso.
     private func runProximityLoop() async {
         while !Task.isCancelled, let cue = currentCue {
-            await audio.playProximityClick(intensity: cue.intensity)
+            if audioEnabled { await audio.playProximityClick(intensity: cue.intensity) }
 
-            if isRunning, let player = proximityPlayer {
+            if hapticsEnabled, !isRunning { await ensureRunning() }
+
+            if hapticsEnabled, isRunning, let player = proximityPlayer {
                 try? player.sendParameters([
                     CHHapticDynamicParameter(parameterID: .hapticIntensityControl,
                                              value: Float(cue.intensity),
@@ -174,9 +251,9 @@ actor CoreHapticsEngine: HapticsEngine {
 
     func updateAlignment(clearance: CGFloat?) async {
         let intensity = clearance.flatMap(ProximityMapping.alignmentIntensity(clearance:))
-        await audio.updateAlignment(intensity: intensity)
+        await audio.updateAlignment(intensity: audioEnabled ? intensity : nil)
 
-        guard isRunning, let player = alignmentPlayer else { return }
+        guard hapticsEnabled, isRunning, let player = alignmentPlayer else { return }
 
         guard let intensity else {
             if alignmentActive {

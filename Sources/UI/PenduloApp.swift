@@ -22,6 +22,7 @@ struct RootView: View {
     @State private var scene: GameScene
     @State private var showingDebug = false
     @State private var showingSettings = false
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // Un único motor háptico para toda la app, compartido por la escena y por la
@@ -79,6 +80,23 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.25), value: model.phase)
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
+        // El motor háptico muere con las interrupciones (llamada, Siri, suspensión) y
+        // nadie lo rearrancaba: era el "a veces no vibra" (docs/lenguaje-haptico.md §7).
+        .onChange(of: scenePhase) { _, phase in
+            let engine = self.engine
+            if phase == .active {
+                Task { await engine.ensureRunning() }
+            } else {
+                // Un continuous vibrando en background es un bug reportable.
+                Task { await engine.stopContinuous() }
+            }
+        }
+        // El motor filtra cada canal por su cuenta, así que hápticos OFF + sonido ON
+        // da solo sonido. Aquí es donde vive el interruptor, así que aquí se empuja.
+        .onChange(of: [settings.hapticsEnabled, settings.audioEnabled], initial: true) { _, channels in
+            let engine = self.engine
+            Task { await engine.setChannels(haptics: channels[0], audio: channels[1]) }
+        }
         .sheet(isPresented: $showingDebug) { HapticsDebugView(engine: engine) }
         .sheet(isPresented: $showingSettings) { SettingsView(settings: settings) }
         .task {

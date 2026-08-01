@@ -164,9 +164,11 @@ Ajuste **«Zonas a ciegas visibles»**: penumbra y ×2 se mantienen, los muros s
 - Patrones de evento **precargados** como `CHHapticPatternPlayer` al arrancar. Crear el patrón en el instante del evento introduce latencia perceptible (~10-20 ms) y en el agarre eso rompe la sensación de causa-efecto.
 - Proximidad y alineación usan `CHHapticAdvancedPatternPlayer` con `loopEnabled` y parámetros dinámicos.
 - `resetHandler`: el motor puede morir (llamada entrante, presión de memoria). Al resetear, se rearranca y se **recargan los players**; si el juego estaba en zona a ciegas, se reanudan proximidad y alineación en el estado actual.
-- `stoppedHandler`: si la razón es `.audioSessionInterrupt` o `.applicationSuspended`, no se rearranca hasta volver a foreground.
+- `stoppedHandler`: si la razón es `.audioSessionInterrupt` o `.applicationSuspended`, no se rearranca hasta volver a foreground. Cualquier otra razón se rearranca en el acto.
+- **`ensureRunning()` es quien cumple ese "hasta volver a foreground"**: `RootView` observa `scenePhase` y en `.active` lo llama. Rearranca el motor si está parado, reintenta entero el `prepare()` si el arranque en frío había fallado y reactiva la `AVAudioSession` y el `AVAudioEngine` del canal de audio, que la interrupción también se lleva. Es idempotente y barato, así que además se usa como guard perezoso al principio de `play()` y en cada vuelta del bucle de proximidad: eso cubre el `isAutoShutdownEnabled` y la carrera con el `stoppedHandler`. Sin esto, una llamada entrante dejaba el juego mudo el resto de la sesión.
 - `engine.start()` es asíncrono y puede lanzar. Un fallo de arranque **no es fatal**: se cae al fallback de 6.1 y el juego sigue.
-- En `willResignActive`: parar los players continuos. Un continuous huérfano vibrando en background es un bug reportable.
+- Fuera de `.active` (`.inactive`/`.background`): parar los players continuos. Un continuous huérfano vibrando en background es un bug reportable.
+- **Los interruptores de Ajustes se filtran por canal, dentro del motor** (`setChannels(haptics:audio:)`, empujado desde `RootView` en cuanto cambian). Hápticos OFF + sonido ON = solo sonido, y apagar los hápticos calla la textura de alineación en el acto. La escena solo decide si merece la pena cruzar al actor cuando los dos canales están apagados.
 
 ---
 

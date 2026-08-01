@@ -49,6 +49,26 @@ actor AudioCueEngine {
         }
     }
 
+    /// Una llamada o Siri desactivan la sesión y paran el `AVAudioEngine`; volver a
+    /// primer plano no lo revive solo. Barato cuando no hace falta.
+    ///
+    /// ponytail: se fía de `engine.isRunning` como síntoma de la interrupción. Si
+    /// apareciera un caso con sesión caída y motor "corriendo", habría que
+    /// suscribirse a `AVAudioSession.interruptionNotification`.
+    func reactivate(substituting: Bool) {
+        guard running else {
+            prepare(substituting: substituting)
+            return
+        }
+        guard !engine.isRunning else { return }
+
+        try? AVAudioSession.sharedInstance().setActive(true)
+        try? engine.start()
+        cuePlayer.play()
+        tonePlayer.play()
+        toneActive = false
+    }
+
     func enableSubstitution() {
         gain = Tuning.Audio.substituteGain
     }
