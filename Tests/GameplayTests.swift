@@ -136,3 +136,22 @@ struct SolvabilityTests {
         #expect(best >= 3, "Mejor run del bot: \(best) muros.\n\(report)")
     }
 }
+
+@Suite("Bot de demo")
+struct DemoPilotTests {
+
+    /// La demo pilota las capturas y el vídeo de la ficha, y su plano estrella es
+    /// la primera zona a ciegas (muros 11-13). Si el plan no llega vivo más allá,
+    /// el material de App Store no se puede grabar — eso es exactamente lo que
+    /// pasaba con el heurístico antiguo, que moría hacia el muro 8.
+    @Test("El plan de la demo cruza la primera zona a ciegas")
+    func planCrossesFirstBlindZone() {
+        var sim = GameSimulation(seed: Tuning.WorldGen.initialSeed)
+        for hold in DemoPilot.plan {
+            _ = sim.advance(dt: DemoPilot.stepDT, holding: hold)
+            if sim.isDead { break }
+        }
+        #expect(!sim.isDead)
+        #expect(sim.score >= 14, "el plan replay llegó a \(sim.score) muros")
+    }
+}

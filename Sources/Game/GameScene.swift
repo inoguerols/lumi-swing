@@ -64,6 +64,11 @@ final class GameScene: SKScene {
     private var trailTimer: CGFloat = 0
     private var shakeRemaining: CGFloat = 0
     private var shakeRng = SplitMix64(seed: 0x5EED)
+
+    // Replay de la demo: el plan de DemoPilot solo es fiel a timestep fijo, así
+    // que en demo la simulación avanza en pasos de 1/120 con un acumulador.
+    private var demoStep = 0
+    private var demoAccumulator: CGFloat = 0
     /// Posición de cámara sin el temblor sumado.
     private var cameraBase = CGPoint.zero
 
@@ -487,7 +492,23 @@ final class GameScene: SKScene {
         let dt = CGFloat(currentTime - lastUpdateTime)
         guard dt > 0 else { return }
 
-        for event in simulation.advance(dt: dt, holding: Self.isDemo ? demoInput() : holding) {
+        let events: [GameEvent]
+        if Self.isDemo {
+            // Timestep fijo: el plan buscado por DemoPilot se reproduce paso a
+            // paso; agotado el plan, el heurístico de demoInput() toma el relevo.
+            var collected: [GameEvent] = []
+            demoAccumulator += dt
+            while demoAccumulator >= DemoPilot.stepDT {
+                demoAccumulator -= DemoPilot.stepDT
+                let hold = demoStep < DemoPilot.plan.count ? DemoPilot.plan[demoStep] : demoInput()
+                collected += simulation.advance(dt: DemoPilot.stepDT, holding: hold)
+                demoStep += 1
+            }
+            events = collected
+        } else {
+            events = simulation.advance(dt: dt, holding: holding)
+        }
+        for event in events {
             switch event {
             case .scored(let points):
                 scoreLabel.text = "\(simulation.score)"
@@ -577,6 +598,8 @@ final class GameScene: SKScene {
     /// de 300 ms del brief entero.
     private func restart() {
         simulation.reset(seed: Tuning.WorldGen.initialSeed)
+        demoStep = 0
+        demoAccumulator = 0
         for node in chunkNodes.values { node.removeFromParent() }
         chunkNodes.removeAll()
 
