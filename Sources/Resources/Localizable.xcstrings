@@ -133,6 +133,18 @@
         }
       }
     },
+    "Ritmo": {
+      "comment": "Etiqueta del ritmo sostenido en la pantalla de fin de partida.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pace"
+          }
+        }
+      }
+    },
     "Récord: %lld": {
       "extractionState": "manual",
       "localizations": {
@@ -155,6 +167,17 @@
         }
       }
     },
+    "Tú": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You"
+          }
+        }
+      }
+    },
     "Ver los muros a ciegas": {
       "extractionState": "manual",
       "localizations": {
@@ -173,6 +196,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "blind zone · trust your touch"
+          }
+        }
+      }
+    },
+    "m/s": {
+      "comment": "Unidad del ritmo sostenido en la pantalla de fin de partida.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "m/s"
           }
         }
       }

@@ -36,15 +36,28 @@ enum Palette {
 
     // MARK: - El jugador (cálido)
 
-    static let firefly = SKColor(red: 1.00, green: 0.88, blue: 0.40, alpha: 1)
+    static let firefly = SKColor(red: 1.00, green: 0.82, blue: 0.30, alpha: 1)
     /// Color del halo del parpadeo (aditivo, detrás de todo). Ya no es el borde del
     /// cuerpo: F4 saca el latido del propio cuerpo para que este nunca se transparente.
     static let fireflyGlow = SKColor(red: 0.85, green: 1.00, blue: 0.45, alpha: 0.35)
-    static let fireflyWing = SKColor(red: 0.80, green: 0.95, blue: 0.85, alpha: 0.50)
-    /// Cuerpo de la luciérnaga: opaco de verdad (antes 0.85 de alpha, que es justo lo
-    /// que hacía "transparentar" el material). Ahora es el color del cuerpo entero,
-    /// no solo del detalle de ojos/antenas.
-    static let fireflyDetail = SKColor(red: 0.15, green: 0.14, blue: 0.08, alpha: 1)
+    /// Lo único oscuro del personaje: los ojos, casi negros (nota de dirección de
+    /// arte), para que el highlight blanco nítido tenga contraste máximo. Son los
+    /// dos únicos rasgos sobre la bola encendida — Lumi es luz hasta el núcleo.
+    static let fireflyEye = SKColor(red: 0.06, green: 0.04, blue: 0.03, alpha: 1)
+
+    /// La bola de luz que es el cuerpo. El degradado desplaza el MATIZ, no solo el
+    /// brillo: blanco cálido → amarillo → naranja → rescoldo rojizo que muere en
+    /// alpha 0 (ver `GameScene.makeLightTexture`). Un fundido que solo baja el
+    /// brillo pasa por grises; este nunca.
+    static let fireflyCore = SKColor(red: 1.00, green: 0.973, blue: 0.878, alpha: 1)  // #FFF8E0
+    static let fireflyAmber = SKColor(red: 1.00, green: 0.616, blue: 0.239, alpha: 1) // #FF9D3D
+    /// El último tramo del desvanecido, ligeramente rojizo: solo existe como color
+    /// de destino del degradado (llega ya con alpha 0).
+    static let fireflyEmber = SKColor(red: 1.00, green: 0.42, blue: 0.22, alpha: 1)
+    /// Luz ambiente que la luciérnaga proyecta sobre la selva cercana: cálida y un
+    /// punto verdosa para que el verde del fondo se aclare hacia su propio matiz y
+    /// no hacia el naranja puro (nada de «clipart sobre el fondo»).
+    static let fireflyAmbient = SKColor(red: 0.95, green: 0.88, blue: 0.52, alpha: 1)
 
     // MARK: - Los asideros (fríos)
 

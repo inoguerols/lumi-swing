@@ -1,3 +1,4 @@
+import CoreImage
 import SpriteKit
 import UIKit
 
@@ -17,18 +18,39 @@ final class GameScene: SKScene {
 
     private let worldNode = SKNode()
     private let cameraNode = SKCameraNode()
-    /// La luciérnaga entera. `bodyNode` es la silueta que mide el radio de colisión
-    /// (óvalo inscrito en el círculo, nunca lo desborda); alas, ojos y antenas van
-    /// dentro o se leen vaporosos, y nunca engañan sobre qué mata. `haloNode` va
-    /// detrás de todo y es el único que late con el parpadeo — el cuerpo se queda
-    /// opaco siempre, así no "transparenta".
+    /// Lumi entera: una bola de luz con ojazos y cola de cometa. El glow
+    /// **es** el cuerpo; no hay anatomía de insecto que leer a 36 px.
+    ///
+    /// `bodyGroup` es la bola, y es lo único que gira con la pose y se
+    /// estira con la velocidad; la cara cuelga de `playerNode` y solo se ladea
+    /// una fracción del giro (`faceLeanFactor`). Su masa dibujada cabe entera dentro de
+    /// `Tuning.Player.radius`, que sigue siendo **el** radio de colisión (la cuenta
+    /// está en `Tuning.Scenery.bodyRadius`). Lo que asoma fuera —bloom, motas,
+    /// halo, estela— es luz difusa, nunca masa. `haloNode` va detrás de todo y es el
+    /// único que late con el parpadeo.
     private let playerNode = SKNode()
-    private let haloNode = SKShapeNode(circleOfRadius: Tuning.Player.radius * Tuning.Scenery.haloRadiusScale)
-    private let bodyNode = SKShapeNode(ellipseOf: CGSize(width: Tuning.Scenery.bodyWidth,
-                                                          height: Tuning.Scenery.bodyLength))
-    private let lanternNode = SKShapeNode()
-    private var wingNodes: [SKShapeNode] = []
+    private let haloNode = SKSpriteNode()
+    private let bodyGroup = SKNode()
+    /// La cara (solo los ojos): vive fuera de `bodyGroup` para no estirarse con
+    /// la velocidad, pero `updatePose` la ladea una fracción del giro del cuerpo.
+    private let faceGroup = SKNode()
     private let ropeNode = SKShapeNode()
+
+    /// La textura suave que comparten cuerpo, bloom, halo y estela: se genera una
+    /// vez al montar la escena (`buildFirefly` corre antes que `buildTrail`).
+    private var lightTexture = SKTexture()
+
+    /// Estado del muelle de la pose: ángulo actual y velocidad angular. Vive aquí y
+    /// no en la simulación porque es presentación pura — la física no gira.
+    private var poseAngle: CGFloat = 0
+    private var poseAngularVelocity: CGFloat = 0
+
+    /// Se lee al montar y al empezar cada partida, no por frame. Solo apaga
+    /// chispas y baja la estela: la pose y la cola no son movimiento gratuito,
+    /// son la información de dónde estás y hacia dónde vas.
+    private var reduceMotion = false
+    private var sparkTimer: CGFloat = 0
+    private var sparkRng = SplitMix64(seed: 0x5A_9A)
 
     /// Decorado: cielo y dos capas de vegetación que se quedan atrás.
     private let skyNode = SKSpriteNode()
@@ -40,7 +62,7 @@ final class GameScene: SKScene {
     private let moonNode = SKNode()
     private var moonHomePosition = CGPoint.zero
 
-    /// Latido del abdomen, sincronizado con el háptico de proximidad.
+    /// Latido del halo, sincronizado con el háptico de proximidad.
     private var blinkTimer: CGFloat = 0
     private var chunkNodes: [Int: SKNode] = [:]
     private let scoreLabel = SKLabelNode(fontNamed: GameScene.sfRoundedFontName(weight: .heavy))
@@ -59,7 +81,7 @@ final class GameScene: SKScene {
     private var proximityBucket: Int?
     private var alignmentBucket: Int?
 
-    private var trailNodes: [SKShapeNode] = []
+    private var trailNodes: [SKSpriteNode] = []
     private var trailPositions: [CGPoint] = []
     private var trailTimer: CGFloat = 0
     private var shakeRemaining: CGFloat = 0
@@ -105,6 +127,8 @@ final class GameScene: SKScene {
 
     override func didMove(to view: SKView) {
         guard worldNode.parent == nil else { return }
+
+        reduceMotion = UIAccessibility.isReduceMotionEnabled
 
         addChild(cameraNode)
         camera = cameraNode
@@ -238,11 +262,16 @@ final class GameScene: SKScene {
     private func buildPollen(width: CGFloat, height: CGFloat) {
         var rng = SplitMix64(seed: 0xF0_11_E7)
         for _ in 0..<Tuning.Scenery.pollenCount {
-            let mote = SKShapeNode(circleOfRadius: Tuning.Scenery.pollenRadius)
+            // Bokeh, no confeti: radio y alpha distintos por partícula, y un
+            // fundido cíclico desfasado — discos idénticos, estáticos y de alpha
+            // uniforme se leían como pegatinas sobre el cristal.
+            let mote = SKShapeNode(circleOfRadius: rng.nextCGFloat(
+                in: Tuning.Scenery.pollenRadiusMin...Tuning.Scenery.pollenRadiusMax))
             mote.fillColor = Palette.pollen
             mote.strokeColor = .clear
             mote.blendMode = .add
-            mote.alpha = rng.nextCGFloat(in: 0.06...0.22)
+            let peakAlpha = rng.nextCGFloat(in: 0.06...0.22)
+            mote.alpha = peakAlpha
             mote.zPosition = -70
             mote.position = CGPoint(x: rng.nextCGFloat(in: (-width / 2)...(width / 2)),
                                     y: rng.nextCGFloat(in: (-height / 2)...(height / 2)))
@@ -260,6 +289,19 @@ final class GameScene: SKScene {
                         y: rng.nextCGFloat(in: -60...(-20)),
                         duration: drift)
             ])))
+
+            let fade = TimeInterval(Tuning.Scenery.pollenFadeDuration
+                                    * rng.nextCGFloat(in: 0.7...1.4))
+            let dim = SKAction.fadeAlpha(to: peakAlpha * Tuning.Scenery.pollenFadeFloor,
+                                         duration: fade)
+            dim.timingMode = .easeInEaseOut
+            let brighten = SKAction.fadeAlpha(to: peakAlpha, duration: fade)
+            brighten.timingMode = .easeInEaseOut
+            mote.run(.sequence([
+                // El desfase por partícula: sin él, toda la selva respiraría a la vez.
+                .wait(forDuration: TimeInterval(rng.nextCGFloat(in: 0...CGFloat(fade * 2)))),
+                .repeatForever(.sequence([dim, brighten]))
+            ]))
             pollenNode.addChild(mote)
         }
     }
@@ -279,113 +321,453 @@ final class GameScene: SKScene {
             y: moonHomePosition.y - camera.y * Tuning.Scenery.parallaxMoon * 0.3)
     }
 
-    // MARK: - La luciérnaga
+    // MARK: - Lumi
 
+    /// Tres elementos y ni uno más: bola de luz, ojazos y cola. El
+    /// orden de dibujo es el orden de lectura — primero la luz, luego lo oscuro
+    /// encima, que es lo único que sobrevive al tamaño de un icono.
     private func buildFirefly() {
-        // Halo primero: el más al fondo de todos, aditivo, y el único nodo que el
-        // parpadeo toca (ver `updateBlink`). El cuerpo ya no se desvanece nunca.
-        haloNode.fillColor = Palette.fireflyGlow
-        haloNode.strokeColor = .clear
+        lightTexture = Self.makeLightTexture()
+
+        // Luz ambiente primero: el halo más ancho y más tenue, el que hace que la
+        // luz BAÑE el fondo — el verde de la selva se aclara alrededor de Lumi
+        // porque este sprite aditivo se dibuja encima de troncos y dosel (el
+        // jugador va a z20 y la escenografía por debajo). Ligeramente verdoso para
+        // aclarar el fondo hacia su propio matiz y que el personaje pertenezca a
+        // la escena en vez de flotar recortado sobre ella.
+        let ambientSide = Tuning.Player.radius * Tuning.Scenery.ambientRadiusScale * 2
+        let ambient = SKSpriteNode(texture: lightTexture,
+                                   size: CGSize(width: ambientSide, height: ambientSide))
+        ambient.color = Palette.fireflyAmbient
+        ambient.colorBlendFactor = 1
+        ambient.blendMode = .add
+        ambient.alpha = Tuning.Scenery.ambientAlpha
+        playerNode.addChild(ambient)
+
+        // Halo intermedio: entre el halo pegado al cuerpo (1,8·r) y la luz
+        // ambiente (4,6·r) quedaba un escalón visible — la zona brillante
+        // terminaba de golpe y luego empezaba un disco tenue. Este puente cálido
+        // hace que la caída sea continua: cuatro radios, cuatro alfas.
+        let midSide = Tuning.Player.radius * Tuning.Scenery.midHaloRadiusScale * 2
+        let midHalo = SKSpriteNode(texture: lightTexture,
+                                   size: CGSize(width: midSide, height: midSide))
+        midHalo.color = Palette.firefly
+        midHalo.colorBlendFactor = 1
+        midHalo.blendMode = .add
+        midHalo.alpha = Tuning.Scenery.midHaloAlpha
+        playerNode.addChild(midHalo)
+
+        // Halo después: aditivo, y el único nodo que el parpadeo toca (ver
+        // `updateBlink`). Es un sprite con la textura difusa y no un círculo: un
+        // disco aditivo con canto duro se lee como un aro. Con el ambiente, el
+        // halo y las capas de bloom del cuerpo, la luz cae en tres radios y tres
+        // alfas distintos, no en un único aro.
+        let haloSide = Tuning.Player.radius * Tuning.Scenery.haloRadiusScale * 2
+        haloNode.texture = lightTexture
+        haloNode.size = CGSize(width: haloSide, height: haloSide)
+        haloNode.color = Palette.fireflyGlow
+        haloNode.colorBlendFactor = 1
         haloNode.blendMode = .add
         haloNode.alpha = Tuning.Scenery.haloDimAlpha
         playerNode.addChild(haloNode)
 
-        // Alas: opacas y con mezcla normal (ya no aditivas), pero se añaden antes
-        // que el cuerpo — el propio orden de dibujo las recorta contra la silueta
-        // opaca en vez de dejarlas solapar por encima como una capa de brillo.
-        for side in [-1, 1] as [CGFloat] {
-            let wing = SKShapeNode(ellipseOf: CGSize(width: Tuning.Scenery.wingLength,
-                                                     height: Tuning.Scenery.wingWidth))
-            wing.fillColor = Palette.fireflyWing
-            wing.strokeColor = .clear
-            wing.blendMode = .alpha
-            wing.alpha = 0.85
-            wing.position = CGPoint(x: side * Tuning.Player.radius * 0.5,
-                                    y: Tuning.Player.radius * 0.55)
-            wing.zRotation = side * 0.45
-            playerNode.addChild(wing)
-            wingNodes.append(wing)
-        }
+        // Las motas cuelgan del jugador, no del cuerpo: no rotan con la pose ni se
+        // estiran con la velocidad, porque son aire iluminado, no anatomía.
+        buildMotes()
 
-        // Cuerpo: un único óvalo opaco, sin stroke (la costura translúcida de antes
-        // vivía justo ahí). Alargado con la cabeza arriba (ojos/antenas) y la cola
-        // abajo, donde va la gota encendida.
-        bodyNode.fillColor = Palette.fireflyDetail
-        bodyNode.strokeColor = .clear
-        bodyNode.alpha = 1
-        playerNode.addChild(bodyNode)
-
-        // La gota de luz del abdomen trasero: el único acento cálido grande del
-        // cuerpo, la silueta de "1cm²" que pedía la crítica.
-        lanternNode.path = teardropPath(radius: Tuning.Scenery.lanternRadius,
-                                        tailLength: Tuning.Scenery.lanternTailLength,
-                                        halfAngle: Tuning.Scenery.lanternHalfAngle)
-        lanternNode.fillColor = Palette.firefly
-        lanternNode.strokeColor = .clear
-        lanternNode.alpha = 1
-        lanternNode.position = CGPoint(x: 0, y: Tuning.Scenery.lanternOffsetY)
-        playerNode.addChild(lanternNode)
-
-        for side in [-1, 1] as [CGFloat] {
-            // Ojos cálidos sobre la cabeza oscura: con el cuerpo ya no amarillo,
-            // un ojo del mismo `fireflyDetail` desaparecería contra él.
-            let eye = SKShapeNode(circleOfRadius: Tuning.Scenery.eyeRadius)
-            eye.fillColor = Palette.firefly
-            eye.strokeColor = .clear
-            eye.position = CGPoint(x: side * Tuning.Player.radius * 0.34,
-                                   y: Tuning.Player.radius * 0.30)
-            playerNode.addChild(eye)
-
-            let antenna = SKShapeNode()
-            let path = CGMutablePath()
-            path.move(to: CGPoint(x: side * Tuning.Player.radius * 0.3,
-                                  y: Tuning.Player.radius * 0.7))
-            path.addQuadCurve(
-                to: CGPoint(x: side * Tuning.Scenery.antennaLength,
-                            y: Tuning.Player.radius + Tuning.Scenery.antennaLength * 0.8),
-                control: CGPoint(x: side * Tuning.Scenery.antennaLength * 0.4,
-                                 y: Tuning.Player.radius + Tuning.Scenery.antennaLength * 0.6))
-            antenna.path = path
-            antenna.strokeColor = Palette.fireflyDetail
-            antenna.lineWidth = 2.5
-            antenna.lineCap = .round
-            playerNode.addChild(antenna)
-        }
-
-        startWingFlap()
+        playerNode.addChild(bodyGroup)
+        buildLightBall()
+        buildFace()
     }
 
-    /// La gota de luz de la cola: un círculo que se estrecha en una punta hacia
-    /// abajo. Un único `CGPath` cerrado — nada de superponer formas translúcidas,
-    /// que es justo lo que dejaba costuras en el diseño anterior.
-    private func teardropPath(radius: CGFloat, tailLength: CGFloat, halfAngle: CGFloat) -> CGPath {
-        let tip = CGPoint(x: 0, y: -radius - tailLength)
-        let rightAngle = -CGFloat.pi / 2 + halfAngle
-        let leftAngle = -CGFloat.pi / 2 - halfAngle
-        let right = CGPoint(x: cos(rightAngle) * radius, y: sin(rightAngle) * radius)
-        let left = CGPoint(x: cos(leftAngle) * radius, y: sin(leftAngle) * radius)
+    /// El cuerpo **es** la luz: la misma textura difusa repetida en capas aditivas
+    /// concéntricas para el bloom, y encima la bola sólida. Ninguna capa tiene canto
+    /// duro porque todas mueren en alpha 0 dentro de su propia textura.
+    private func buildLightBall() {
+        let side = Self.lightTextureSide
+        for step in 0..<Tuning.Scenery.bodyGlowLayers {
+            let t = CGFloat(step + 1) / CGFloat(Tuning.Scenery.bodyGlowLayers)
+            let scale = lerp(1.15, Tuning.Scenery.bodyGlowScale, t)
+            let glow = SKSpriteNode(texture: lightTexture,
+                                    size: CGSize(width: side * scale, height: side * scale))
+            glow.blendMode = .add
+            glow.alpha = Tuning.Scenery.bodyGlowAlpha / CGFloat(Tuning.Scenery.bodyGlowLayers)
+            bodyGroup.addChild(glow)
+        }
 
-        let path = CGMutablePath()
-        path.move(to: right)
-        // El arco largo, por arriba, deja el hueco de abajo para la punta.
-        path.addArc(center: .zero, radius: radius,
-                    startAngle: rightAngle, endAngle: leftAngle + 2 * .pi,
-                    clockwise: false)
-        path.addQuadCurve(to: tip, control: CGPoint(x: left.x * 0.35, y: (left.y + tip.y) * 0.5))
-        path.addQuadCurve(to: right, control: CGPoint(x: right.x * 0.35, y: (right.y + tip.y) * 0.5))
-        path.closeSubpath()
-        return path
+        let ball = SKSpriteNode(texture: lightTexture,
+                                size: CGSize(width: side, height: side))
+        bodyGroup.addChild(ball)
+
+        // Microvida: la bola respira ±5% cada ~1,2 s, con duraciones jitteradas
+        // (SplitMix64, determinista: nada de Date ni random del sistema) para que
+        // el pulso no sea un metrónomo píxel-idéntico. Ocho ciclos distintos
+        // encadenados y repetidos bastan para que el bucle no se lea. Con Reduce
+        // Motion respira a la mitad — una luz viva es estética, no movimiento.
+        let pulseAmount = reduceMotion
+            ? 1 + (Tuning.Scenery.corePulseScale - 1) / 2
+            : Tuning.Scenery.corePulseScale
+        var pulseRng = SplitMix64(seed: 0x9015_E5)
+        var pulses: [SKAction] = []
+        for _ in 0..<8 {
+            for target in [pulseAmount, 1] {
+                let jitter = pulseRng.nextCGFloat(
+                    in: (1 - Tuning.Scenery.corePulseJitter)...(1 + Tuning.Scenery.corePulseJitter))
+                let half = SKAction.scale(
+                    to: target,
+                    duration: TimeInterval(Tuning.Scenery.corePulseDuration * jitter) / 2)
+                half.timingMode = .easeInEaseOut
+                pulses.append(half)
+            }
+        }
+        ball.run(.repeatForever(.sequence(pulses)))
+
+        // Y el núcleo parpadea por ENCIMA del cuerpo, nunca restándole alpha (F4
+        // prohíbe que el cuerpo se transparente): un segundo sprite aditivo
+        // pequeño cuya intensidad ondula con periodos desiguales, para que no se
+        // lea como un metrónomo. Reduce Motion lo apaga.
+        guard !reduceMotion else { return }
+        let core = SKSpriteNode(texture: lightTexture,
+                                size: CGSize(width: side * 0.6, height: side * 0.6))
+        core.blendMode = .add
+        core.alpha = Tuning.Scenery.coreFlickerAlphaLow
+        bodyGroup.addChild(core)
+        core.run(.repeatForever(.sequence([
+            .fadeAlpha(to: Tuning.Scenery.coreFlickerAlphaHigh, duration: 0.45),
+            .fadeAlpha(to: Tuning.Scenery.coreFlickerAlphaLow, duration: 0.7),
+            .fadeAlpha(to: Tuning.Scenery.coreFlickerAlphaHigh * 0.8, duration: 0.3),
+            .fadeAlpha(to: Tuning.Scenery.coreFlickerAlphaLow, duration: 0.55)
+        ])))
     }
 
-    private func startWingFlap() {
-        let duration = TimeInterval(Tuning.Scenery.wingFlapDuration)
-        for wing in wingNodes {
-            wing.removeAllActions()
-            wing.run(.repeatForever(.sequence([
-                .scaleY(to: 0.45, duration: duration),
-                .scaleY(to: 1.0, duration: duration)
-            ])))
+    /// La cara: dos ojazos con su brillo, y nada más — ni boca, ni cejas, ni
+    /// masa oscura encima (vía Limbo/Sein: el personaje es luminoso hasta el
+    /// núcleo, y a 36 px cada trazo extra emborrona los dos que sí se leen).
+    ///
+    /// La cara cuelga del jugador, NO de `bodyGroup` — el cuerpo y el glow rotan
+    /// y se estiran con la física; la cara solo se ladea una fracción del giro
+    /// (`updatePose`), que devuelve el swing a la lectura sin tumbar la mirada.
+    /// Los ojos van en su propio sprite para poder parpadear (squash vertical
+    /// rápido); el parpadeo sobrevive a Reduce Motion.
+    private func buildFace() {
+        let side = (Tuning.Scenery.bodyRadius + Tuning.Scenery.facePadding) * 2
+
+        let eyes = SKSpriteNode(texture: Self.makeEyesTexture(),
+                                size: CGSize(width: side, height: side))
+        // El ancla en la línea de los ojos: el squash del parpadeo cierra los
+        // párpados en su sitio en vez de arrastrar los ojos hacia el centro.
+        eyes.anchorPoint = CGPoint(x: 0.5, y: 0.5 + Tuning.Scenery.eyeOffsetY / side)
+        eyes.position = CGPoint(x: 0, y: Tuning.Scenery.eyeOffsetY)
+        faceGroup.addChild(eyes)
+
+        // Cadena de parpadeos con jitter determinista, prehorneada y repetida:
+        // ocho intervalos distintos bastan para que no se lea el bucle.
+        var rng = SplitMix64(seed: 0xB11_4C)
+        var blinks: [SKAction] = []
+        for _ in 0..<8 {
+            let wait = rng.nextCGFloat(
+                in: Tuning.Scenery.eyeBlinkIntervalMin...Tuning.Scenery.eyeBlinkIntervalMax)
+            blinks.append(.wait(forDuration: TimeInterval(wait)))
+            blinks.append(.scaleY(to: Tuning.Scenery.eyeBlinkSquash,
+                                  duration: TimeInterval(Tuning.Scenery.eyeBlinkCloseDuration)))
+            blinks.append(.scaleY(to: 1,
+                                  duration: TimeInterval(Tuning.Scenery.eyeBlinkOpenDuration)))
         }
+        eyes.run(.repeatForever(.sequence(blinks)))
+
+        playerNode.addChild(faceGroup)
+    }
+
+    /// Dos o tres motas cálidas flotando cerca. Nodos animados y no un emisor: son
+    /// tres partículas con deriva lenta, y un `SKEmitterNode` para eso es traer un
+    /// sistema entero para colgarle tres puntos.
+    private func buildMotes() {
+        // Corro de motas en un contenedor que gira despacio: la deriva vertical de
+        // cada mota más la órbita del corro es lo que las hace aire y no adorno.
+        // Con Reduce Motion la órbita se para; la deriva suave se queda.
+        let ring = SKNode()
+        ring.zPosition = -1
+        playerNode.addChild(ring)
+        if !reduceMotion {
+            ring.run(.repeatForever(.rotate(byAngle: 2 * .pi,
+                                            duration: TimeInterval(Tuning.Scenery.moteOrbitDuration))))
+        }
+
+        var rng = SplitMix64(seed: 0xB0_7A5)
+        for index in 0..<Tuning.Scenery.moteCount {
+            // Sprite con la textura difusa y no un círculo: una mota es luz, y un
+            // `SKShapeNode` por pequeño que sea deja un canto duro.
+            let moteSide = Tuning.Scenery.moteRadius * 2 * rng.nextCGFloat(in: 0.6...1.5)
+            let mote = SKSpriteNode(texture: lightTexture,
+                                    size: CGSize(width: moteSide * 2.4, height: moteSide * 2.4))
+            mote.color = Palette.firefly
+            mote.colorBlendFactor = 1
+            mote.blendMode = .add
+            // Ángulo y radio con jitter: nada de puntos uniformes alineados.
+            let angle = CGFloat(index) / CGFloat(Tuning.Scenery.moteCount) * 2 * .pi
+                + rng.nextCGFloat(in: -0.6...0.6)
+            let orbit = Tuning.Player.radius * Tuning.Scenery.moteOrbit
+                * rng.nextCGFloat(in: 0.75...1.3)
+            mote.position = CGPoint(x: cos(angle) * orbit, y: sin(angle) * orbit)
+            mote.alpha = rng.nextCGFloat(in: 0.2...0.5)
+
+            let drift = TimeInterval(Tuning.Scenery.moteDriftDuration * rng.nextCGFloat(in: 0.8...1.4))
+            let up = SKAction.group([
+                .moveBy(x: rng.nextCGFloat(in: -14...14), y: rng.nextCGFloat(in: 8...20), duration: drift),
+                .fadeAlpha(to: 0.10, duration: drift)
+            ])
+            let down = SKAction.group([
+                .moveBy(x: rng.nextCGFloat(in: -14...14), y: rng.nextCGFloat(in: -20...(-8)), duration: drift),
+                .fadeAlpha(to: rng.nextCGFloat(in: 0.35...0.5), duration: drift)
+            ])
+            mote.run(.repeatForever(.sequence([up, down])))
+            ring.addChild(mote)
+        }
+    }
+
+    /// Lado del sprite que usa la textura difusa, en puntos de juego: la bola sólida
+    /// mide `bodyRadius`, y alrededor lleva el desvanecido hasta alpha 0.
+    private static var lightTextureSide: CGFloat {
+        Tuning.Scenery.bodyRadius * 2 / Tuning.Scenery.bodyEdgeFade
+    }
+
+    /// La bola de luz: degradado radial de núcleo blanco caliente a ámbar que
+    /// termina en **alpha 0 antes del canto de la textura**. Ese último tramo
+    /// transparente es la diferencia entre una luz y una pegatina redonda: un
+    /// `SKShapeNode` circular siempre acaba en un filo, por suave que sea el color.
+    ///
+    /// Se genera una vez y la comparten cuerpo, bloom, halo y estela.
+    private static func makeLightTexture() -> SKTexture {
+        let scale = Tuning.Scenery.bodyTextureScale
+        let side = max(1, Int(lightTextureSide * scale))
+        let space = CGColorSpaceCreateDeviceRGB()
+
+        guard let context = CGContext(data: nil,
+                                      width: side,
+                                      height: side,
+                                      bitsPerComponent: 8,
+                                      bytesPerRow: 0,
+                                      space: space,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let gradient = CGGradient(
+                colorsSpace: space,
+                // Tres paradas con el matiz desplazado (blanco cálido → ámbar →
+                // naranja quemado que muere en alpha 0): la parada dura de alpha
+                // que había en 0,88 dibujaba el anillo naranja como una frontera.
+                // Ahora la interpolación núcleo→canto es continua en matiz y en
+                // alpha; el banding restante lo mata el ruido horneado de abajo.
+                colors: [Palette.fireflyCore.cgColor,
+                         Palette.fireflyAmber.cgColor,
+                         Palette.fireflyEmber.withAlphaComponent(0).cgColor] as CFArray,
+                locations: [0, Tuning.Scenery.bodyEdgeFade, 1])
+        else { return SKTexture() }
+
+        let center = CGPoint(x: CGFloat(side) / 2, y: CGFloat(side) / 2)
+        context.drawRadialGradient(gradient,
+                                   startCenter: center, startRadius: 0,
+                                   endCenter: center, endRadius: CGFloat(side) / 2,
+                                   options: [])
+
+        // Ruido determinista del 1-2% por canal, horneado UNA vez: dither contra
+        // el banding del degradado. No toca el alpha, y cada canal se acota a su
+        // alpha premultiplicado para que la textura siga siendo válida.
+        if let data = context.data {
+            var rng = SplitMix64(seed: 0xD1_7E4)
+            let bytesPerRow = context.bytesPerRow
+            let pixels = data.bindMemory(to: UInt8.self, capacity: bytesPerRow * side)
+            for row in 0..<side {
+                for column in 0..<side {
+                    let index = row * bytesPerRow + column * 4
+                    let alpha = pixels[index + 3]
+                    let factor = 1 + Tuning.Scenery.lightTextureNoise
+                        * rng.nextCGFloat(in: -1...1)
+                    guard alpha > 0 else { continue }
+                    for channel in 0..<3 {
+                        let value = CGFloat(pixels[index + channel]) * factor
+                        pixels[index + channel] = UInt8(min(value.rounded(), CGFloat(alpha)))
+                    }
+                }
+            }
+        }
+
+        guard let image = context.makeImage() else { return SKTexture() }
+        return SKTexture(cgImage: image)
+    }
+
+    /// Contexto cuadrado centrado y a escala de juego para hornear la cara.
+    private static func makeFaceContext(side: Int, scale: CGFloat) -> CGContext? {
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(data: nil,
+                                      width: side,
+                                      height: side,
+                                      bitsPerComponent: 8,
+                                      bytesPerRow: 0,
+                                      space: space,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        context.translateBy(x: CGFloat(side) / 2, y: CGFloat(side) / 2)
+        context.scaleBy(x: scale, y: scale)
+        return context
+    }
+
+    /// Blur gaussiano horneado UNA vez, en píxeles de textura sobremuestreada.
+    /// `facePadding` garantiza que la cola del blur cabe sin recortarse.
+    private static func blurred(_ image: CGImage, side: Int, scale: CGFloat) -> CGImage? {
+        let soft = CIImage(cgImage: image)
+            .applyingGaussianBlur(sigma: Double(Tuning.Scenery.faceBlurSigma * scale))
+            .cropped(to: CGRect(x: 0, y: 0, width: side, height: side))
+        return CIContext().createCGImage(soft, from: soft.extent)
+    }
+
+    /// Los ojos, casi negros y con blur… y encima, SIN blur, los dos brillos
+    /// blancos: el highlight nítido sobre el ojo blando es lo que hace la mirada
+    /// viva en vez de un par de agujeros desenfocados.
+    private static func makeEyesTexture() -> SKTexture {
+        let scale = Tuning.Scenery.bodyTextureScale
+        let side = max(1, Int((Tuning.Scenery.bodyRadius + Tuning.Scenery.facePadding) * 2 * scale))
+        guard let context = makeFaceContext(side: side, scale: scale) else { return SKTexture() }
+
+        for eyeSide in [-1, 1] as [CGFloat] {
+            let eyeCenter = CGPoint(x: eyeSide * Tuning.Scenery.eyeOffsetX,
+                                    y: Tuning.Scenery.eyeOffsetY)
+            context.setFillColor(Palette.fireflyEye.cgColor)
+            context.fillEllipse(in: CGRect(x: eyeCenter.x - Tuning.Scenery.eyeRadius,
+                                           y: eyeCenter.y - Tuning.Scenery.eyeRadius,
+                                           width: Tuning.Scenery.eyeRadius * 2,
+                                           height: Tuning.Scenery.eyeRadius * 2))
+        }
+
+        guard let sharpEyes = context.makeImage(),
+              let softEyes = blurred(sharpEyes, side: side, scale: scale),
+              let composite = makeFaceContext(side: side, scale: scale)
+        else { return SKTexture() }
+
+        // El contexto ya está transformado: se deshace para pegar la imagen
+        // blanda tal cual y se vuelve a aplicar para dibujar los brillos encima.
+        composite.saveGState()
+        composite.concatenate(composite.ctm.inverted())
+        composite.draw(softEyes, in: CGRect(x: 0, y: 0, width: side, height: side))
+        composite.restoreGState()
+
+        for eyeSide in [-1, 1] as [CGFloat] {
+            // Hacia dentro y arriba en los dos ojos: los dos brillos apuntando al
+            // mismo sitio es lo que hace que la mirada converja en algo.
+            let highlightCenter = CGPoint(
+                x: eyeSide * Tuning.Scenery.eyeOffsetX
+                    - eyeSide * Tuning.Scenery.eyeHighlightOffset,
+                y: Tuning.Scenery.eyeOffsetY + Tuning.Scenery.eyeHighlightOffset)
+            composite.setFillColor(Palette.fireflyCore.cgColor)
+            composite.fillEllipse(in: CGRect(
+                x: highlightCenter.x - Tuning.Scenery.eyeHighlightRadius,
+                y: highlightCenter.y - Tuning.Scenery.eyeHighlightRadius,
+                width: Tuning.Scenery.eyeHighlightRadius * 2,
+                height: Tuning.Scenery.eyeHighlightRadius * 2))
+        }
+
+        guard let output = composite.makeImage() else { return SKTexture() }
+        return SKTexture(cgImage: output)
+    }
+
+    /// La pose, que es la mitad del personaje.
+    ///
+    /// Colgado, Lumi **no** se alinea con la liana: adopta solo una fracción de su
+    /// ángulo (`uprightBias`) y se queda casi erguida, como quien se agarra a una
+    /// rama en vez de colgar como un badajo. En vuelo libre se inclina hacia donde
+    /// va con el mismo sesgo: la cara (los ojos) debe leerse siempre, y un
+    /// cuerpo que rota 90° con la velocidad la tumba de lado.
+    ///
+    /// Y no persigue ese objetivo con una interpolación, sino con un muelle
+    /// amortiguado de segundo orden: el giro llega tarde y se pasa un poco de frenada
+    /// al cambiar de sentido, que es exactamente lo que separa un cuerpo con masa de
+    /// un valor suavizado.
+    private func updatePose(dt: CGFloat) {
+        let body = simulation.body
+        // Un hipo del sistema no puede reventar el muelle: con un dt enorme la
+        // integración explota y el cuerpo saldría girando.
+        let step = min(dt, Tuning.Pendulum.maxFrameDelta)
+        let speedFactor = clamp(body.velocity.length / Tuning.Pendulum.maxSpeed, 0, 1)
+
+        let target: CGFloat
+        if let attachment = body.attachment {
+            let axis = attachment.anchor - body.position
+            target = (atan2(axis.dy, axis.dx) - .pi / 2) * Tuning.Scenery.uprightBias
+        } else if body.velocity.length > 1 {
+            // Normalizado a [-π, π] ANTES de escalar: -5π/4 y 3π/4 son el mismo
+            // ángulo, pero multiplicados por el sesgo inclinan a lados opuestos.
+            let raw = Self.shortestAngle(
+                from: 0, to: atan2(body.velocity.dy, body.velocity.dx) - .pi / 2)
+            target = raw * Tuning.Scenery.uprightBias
+        } else {
+            target = poseAngle
+        }
+
+        let delta = Self.shortestAngle(from: poseAngle, to: target)
+        poseAngularVelocity += (Tuning.Scenery.poseStiffness * delta
+                                - Tuning.Scenery.poseDamping * poseAngularVelocity) * step
+        poseAngle += poseAngularVelocity * step
+        bodyGroup.zRotation = poseAngle
+        // El cuerpo es radialmente simétrico, así que sin esto el giro físico era
+        // invisible: la cara se ladea con el swing, pero solo una fracción, para
+        // que la mirada no se tumbe en pleno arco.
+        faceGroup.zRotation = poseAngle * Tuning.Scenery.faceLeanFactor
+
+        // El estiramiento sigue a la velocidad sin suavizar (la velocidad ya es
+        // continua) y su tope está calculado contra el squash del agarre en
+        // `Tuning.Scenery.bodyRadius`: el producto de los dos nunca saca la bola del
+        // círculo de colisión.
+        let stretch = 1 + speedFactor * Tuning.Scenery.stretchAtMaxSpeed
+        bodyGroup.yScale = stretch
+        bodyGroup.xScale = 1 / stretch
+    }
+
+    /// Diferencia de ángulos por el camino corto: sin esto, pasar de +π a −π daría
+    /// una vuelta entera de más.
+    private static func shortestAngle(from: CGFloat, to: CGFloat) -> CGFloat {
+        var delta = (to - from).truncatingRemainder(dividingBy: 2 * .pi)
+        if delta > .pi { delta -= 2 * .pi }
+        if delta < -.pi { delta += 2 * .pi }
+        return delta
+    }
+
+    /// Chispas detrás del cuerpo en vuelo libre y rápido. No informan de nada que la
+    /// estela no diga ya: son el premio de ir rápido, y por eso son lo primero que se
+    /// apaga con Reduce Motion — la pose y la cola no, que esas sí cuentan dónde
+    /// estás y hacia dónde vas.
+    private func updateSparks(dt: CGFloat) {
+        let body = simulation.body
+        guard !reduceMotion, !body.isAttached,
+              body.velocity.length
+                > Tuning.Pendulum.maxSpeed * Tuning.Scenery.sparkSpeedThreshold else { return }
+
+        sparkTimer -= dt
+        guard sparkTimer <= 0 else { return }
+        sparkTimer = Tuning.Scenery.sparkInterval
+
+        // ponytail: un nodo cada 90 ms que se borra solo no justifica un pool.
+        // Textura difusa y no círculo: también las chispas mueren sin canto.
+        let sparkSide = Tuning.Scenery.sparkRadius * sparkRng.nextCGFloat(in: 0.5...1) * 2.4
+        let spark = SKSpriteNode(texture: lightTexture,
+                                 size: CGSize(width: sparkSide * 2, height: sparkSide * 2))
+        spark.color = Palette.fireflyCore
+        spark.colorBlendFactor = 1
+        spark.blendMode = .add
+        spark.alpha = 0.75
+        spark.zPosition = Self.lightZPosition - 2
+        spark.position = body.position
+        worldNode.addChild(spark)
+
+        let back = body.velocity.normalized * -Tuning.Player.radius
+        let life = TimeInterval(Tuning.Scenery.sparkLifetime)
+        spark.run(.sequence([
+            .group([
+                .moveBy(x: back.dx + sparkRng.nextCGFloat(in: -18...18),
+                        y: back.dy + sparkRng.nextCGFloat(in: -18...18),
+                        duration: life),
+                .fadeOut(withDuration: life),
+                .scale(to: 0.2, duration: life)
+            ]),
+            .removeFromParent()
+        ]))
     }
 
     /// El halo late al ritmo del háptico de proximidad: las luciérnagas parpadean
@@ -521,11 +903,9 @@ final class GameScene: SKScene {
             case .died:
                 shakeRemaining = Tuning.Camera.deathShakeDuration
                 emit(.death)
-                model.score = simulation.score
-                model.isNewRecord = settings.record(score: simulation.score)
-                model.best = settings.best
-                GameCenter.submit(score: simulation.score)
-                model.phase = .dead
+                model.endRun(score: simulation.score,
+                             bestPaceMetersPerSecond: Double(simulation.bestPaceMetersPerSecond),
+                             settings: settings)
             case .grabbed:
                 squashOnGrab()
                 emit(.grab)
@@ -547,6 +927,8 @@ final class GameScene: SKScene {
         updateDarkness(dt: dt)
         updateSky()
         updateTrail(dt: dt)
+        updatePose(dt: dt)
+        updateSparks(dt: dt)
         updateBlink(dt: dt)
         feedHapticMap()
         syncWorld()
@@ -578,6 +960,9 @@ final class GameScene: SKScene {
     /// Arranca una partida nueva. Lo llama el shell, no la propia escena.
     func startRun() {
         restart()
+        // Se relee aquí y no por frame: el ajuste cambia en Ajustes del sistema, no
+        // a mitad de una partida.
+        reduceMotion = UIAccessibility.isReduceMotionEnabled
         lastUpdateTime = nil
         scoreLabel.alpha = 0
         scoreLabel.run(.fadeIn(withDuration: 0.2))
@@ -662,9 +1047,18 @@ final class GameScene: SKScene {
         shakeRemaining = 0
         trailPositions.removeAll()
         trailTimer = 0
+        sparkTimer = 0
         playerNode.removeAllActions()
         playerNode.xScale = 1
         playerNode.yScale = 1
+        // La pose vuelve a reposo: erguida, quieta y sin estirar. Si no, el menú
+        // heredaría la última pose de la muerte anterior — y el muelle arrancaría la
+        // partida nueva con la velocidad angular con la que se estrelló.
+        poseAngle = 0
+        poseAngularVelocity = 0
+        bodyGroup.zRotation = 0
+        bodyGroup.xScale = 1
+        bodyGroup.yScale = 1
         let haptics = self.haptics
         Task { await haptics.stopContinuous() }
 
@@ -675,14 +1069,19 @@ final class GameScene: SKScene {
 
     // MARK: - Game feel
 
-    /// Estela: nodos reutilizados que se recolocan sobre posiciones pasadas. Un
-    /// `SKEmitterNode` daría más humo, pero también un rastro que no sigue
-    /// exactamente el arco — y aquí el arco es la información.
+    /// La cola del cometa: nodos reutilizados que se recolocan sobre posiciones
+    /// pasadas. Un `SKEmitterNode` daría más humo, pero también un rastro que no
+    /// sigue exactamente el arco — y aquí el arco es la información.
+    ///
+    /// Nacen del propio cuerpo (la marca 0 se pinta encima del jugador, ancha) y se
+    /// estrechan hacia atrás, que es lo que convierte un rastro de puntos en una
+    /// cola. Misma textura difusa que la bola: círculos planos dejaban un canto duro
+    /// que a velocidad alta se leía como un collar de cuentas.
     private func buildTrail() {
         for index in 0..<Tuning.Feel.trailNodeCount {
-            let node = SKShapeNode(circleOfRadius: Effects.trailRadius(index: index))
-            node.fillColor = Palette.lantern
-            node.strokeColor = .clear
+            let side = Effects.trailRadius(index: index) * 2 / Tuning.Scenery.bodyEdgeFade
+            let node = SKSpriteNode(texture: lightTexture,
+                                    size: CGSize(width: side, height: side))
             // Aditivo: un ámbar translúcido sobre un fondo oscuro *oscurece*, y la
             // estela salía marrón sucia. Sumando luz, la estela brilla, que es lo
             // que hace un farolillo al moverse.
@@ -702,17 +1101,22 @@ final class GameScene: SKScene {
             if trailPositions.count > trailNodes.count { trailPositions.removeLast() }
         }
 
-        // El nodo 0 se deja siempre apagado: con la posición y el radio de
-        // `trailPositions[0]` (el propio jugador) quedaba un disco aditivo clavado
-        // bajo el personaje. La estela visible empieza en el índice 1, ya un paso
-        // detrás del cuerpo.
+        // La estela ES el velocímetro: no hay HUD de velocidad (spec §3), así que lo
+        // único que dice "vas rápido" es cuánto rastro dejas. Con Reduce Motion se
+        // atenúa, no desaparece: sigue siendo información.
+        let speedFactor = clamp(simulation.body.velocity.length / Tuning.Pendulum.maxSpeed, 0, 1)
+        let strength = lerp(0.35, 1, speedFactor) * (reduceMotion ? 0.5 : 1)
+
+        // La marca 0 se pinta sobre la última posición muestreada, es decir sobre el
+        // cuerpo: la cola nace de la bola en vez de empezar un paso por detrás, que
+        // es lo que la desprendía del personaje.
         for (index, node) in trailNodes.enumerated() {
-            guard index > 0, index - 1 < trailPositions.count else {
+            guard index < trailPositions.count else {
                 node.alpha = 0
                 continue
             }
-            node.position = trailPositions[index - 1]
-            node.alpha = Effects.trailAlpha(index: index - 1)
+            node.position = trailPositions[index]
+            node.alpha = Effects.trailAlpha(index: index) * strength
         }
     }
 

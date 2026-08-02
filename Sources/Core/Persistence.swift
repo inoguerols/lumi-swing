@@ -10,6 +10,7 @@ final class GameSettings {
 
     private enum Key {
         static let best = "pendulo.best"
+        static let bestPace = "pendulo.bestPace"
         static let haptics = "pendulo.haptics"
         static let audio = "pendulo.audio"
         static let visibleBlindZones = "pendulo.visibleBlindZones"
@@ -20,6 +21,11 @@ final class GameSettings {
     private let defaults: UserDefaults
 
     var best: Int { didSet { defaults.set(best, forKey: Key.best) } }
+    /// Récord personal de ritmo sostenido (mejor media de 10 s de `|velocidad|`),
+    /// en m/s. Sustituye al antiguo récord de pico, que saturaba en el tope
+    /// físico del péndulo — clave nueva a propósito, sin migrar el valor viejo:
+    /// medían cosas distintas.
+    var bestPace: Double { didSet { defaults.set(bestPace, forKey: Key.bestPace) } }
     var hapticsEnabled: Bool { didSet { defaults.set(hapticsEnabled, forKey: Key.haptics) } }
     var audioEnabled: Bool { didSet { defaults.set(audioEnabled, forKey: Key.audio) } }
 
@@ -47,6 +53,7 @@ final class GameSettings {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.best = defaults.integer(forKey: Key.best)
+        self.bestPace = defaults.double(forKey: Key.bestPace)
         // Los interruptores nacen encendidos, así que en la primera ejecución
         // (`object(forKey:) == nil`) hay que devolver `true`, no el `false` que
         // daría `bool(forKey:)`.
@@ -62,6 +69,14 @@ final class GameSettings {
     func record(score: Int) -> Bool {
         guard score > best else { return false }
         best = score
+        return true
+    }
+
+    /// Igual que `record(score:)`, para el récord de ritmo sostenido.
+    @discardableResult
+    func record(paceMetersPerSecond pace: Double) -> Bool {
+        guard pace > bestPace else { return false }
+        bestPace = pace
         return true
     }
 
