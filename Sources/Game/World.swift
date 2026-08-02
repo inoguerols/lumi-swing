@@ -79,6 +79,22 @@ enum BlindZones {
         let window = wallSpacing * Tuning.BlindZone.telegraphWalls
         return clamp(1 - distanceToEntry / window, 0, 1)
     }
+
+    /// Opacidad base del eco de los muros invisibles, dado cuántas zonas a ciegas
+    /// ha vivido ya el jugador **antes** de esta (0 = es la primera de su vida).
+    ///
+    /// La mecánica firma no se aprende rezando: en las primeras zonas el muro
+    /// deja su silueta real en un tono frío apagado, que decae zona a zona hasta
+    /// apagarse del todo. A partir de `Tuning.BlindTeaching.teachingZones` es 0 y
+    /// no vuelve nunca — el aprendizaje termina, la mecánica se queda.
+    static func ghostAlpha(zonesExperienced: Int) -> CGFloat {
+        let zones = Tuning.BlindTeaching.teachingZones
+        let lived = max(0, zonesExperienced)
+        guard lived < zones else { return 0 }
+        // El paréntesis no sobra: multiplicar primero deja la primera zona en
+        // 0,3499999… en vez de en la constante exacta.
+        return Tuning.BlindTeaching.initialAlpha * (CGFloat(zones - lived) / CGFloat(zones))
+    }
 }
 
 enum WorldGenerator {

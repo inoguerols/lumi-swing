@@ -83,4 +83,23 @@ struct SettingsTests {
         settings.blindWallsCrossed += 1
         #expect(!settings.needsBlindNotice)
     }
+
+    @Test("Las zonas a ciegas vividas se cuentan entre partidas, no dentro de una")
+    func blindZonesEnteredPersists() {
+        let defaults = isolatedDefaults("blindZones")
+        let first = GameSettings(defaults: defaults)
+        // Clave nueva: nadie ha gastado la enseñanza todavía, así que todo el
+        // mundo arranca con el eco al máximo.
+        #expect(first.blindZonesEntered == 0)
+        #expect(BlindZones.ghostAlpha(zonesExperienced: first.blindZonesEntered)
+                == Tuning.BlindTeaching.initialAlpha)
+
+        first.blindZonesEntered += 1
+        first.blindZonesEntered += 1
+
+        let reopened = GameSettings(defaults: defaults)
+        #expect(reopened.blindZonesEntered == 2)
+        #expect(BlindZones.ghostAlpha(zonesExperienced: reopened.blindZonesEntered)
+                < Tuning.BlindTeaching.initialAlpha)
+    }
 }

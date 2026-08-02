@@ -983,6 +983,9 @@ final class GameScene: SKScene {
             case .enteredBlindZone:
                 emit(.blindEnter)
                 showBlindNoticeIfStillLearning()
+                // Se cuenta la zona, no sus muros: lo que se aprende es el paso
+                // entero. Es lo que va apagando el eco hasta que no vuelve más.
+                settings.blindZonesEntered += 1
             case .exitedBlindZone:
                 emit(.blindExit)
             }
@@ -1259,6 +1262,30 @@ final class GameScene: SKScene {
         Task { await haptics.setAmbience(gain: gain) }
     }
 
+    /// Con qué opacidad se dibuja ahora mismo el eco de los muros invisibles.
+    ///
+    /// Tres factores: cuántas zonas a ciegas lleva vividas el jugador (la
+    /// enseñanza, que se retira sola), lo cerrado que está el velo (el eco entra
+    /// justo según se apaga el muro real, nunca encima de él) y el latido.
+    ///
+    /// El latido se lee del propio halo, que ya oscila al ritmo del pulso háptico
+    /// de proximidad en `updateBlink`. Es la mitad de la enseñanza: ver el muro
+    /// latir mientras se siente el pulso en el dedo es lo que ata una cosa a la
+    /// otra, y leerlo de la misma fuente hace imposible que se desincronicen.
+    private var blindEchoAlpha: CGFloat {
+        // El contador sube al ENTRAR en la zona, así que mientras se vive una, la
+        // que se está viviendo es la anterior a la cuenta.
+        let lived = simulation.isBlind
+            ? settings.blindZonesEntered - 1
+            : settings.blindZonesEntered
+        let base = BlindZones.ghostAlpha(zonesExperienced: lived)
+        guard base > 0 else { return 0 }
+
+        let span = Tuning.Scenery.haloBrightAlpha - Tuning.Scenery.haloDimAlpha
+        let beat = clamp((haloNode.alpha - Tuning.Scenery.haloDimAlpha) / span, 0, 1)
+        return base * darkness * lerp(Tuning.BlindTeaching.pulseFloor, 1, beat)
+    }
+
     /// Se repite en cada zona nueva mientras el jugador no lleve suficientes
     /// muros a ciegas cruzados con éxito (`Tuning.BlindZone.noticeThreshold`):
     /// una sola vez por instalación era demasiado poco para que la mecánica se
@@ -1374,10 +1401,14 @@ final class GameScene: SKScene {
             worldNode.addChild(node)
         }
 
+        let echoAlpha = blindEchoAlpha
         for chunk in simulation.chunks where chunk.isBlind {
             chunkNodes[chunk.index]?
                 .childNode(withName: Self.wallsNodeName)?
                 .alpha = wallAlpha(for: chunk)
+            chunkNodes[chunk.index]?
+                .childNode(withName: Self.echoNodeName)?
+                .alpha = echoAlpha
         }
 
         playerNode.position = simulation.body.position
@@ -1428,13 +1459,16 @@ final class GameScene: SKScene {
         // el inferior. `makeTrunk` necesita saberlo para poner el muñón de rama en
         // el lado correcto.
         let gapFacesTop = [true, false]
+        var silhouettes: [CGPath] = []
         for (index, (bottom, top)) in segments.enumerated() where top > bottom {
-            walls.addChild(makeTrunk(rect: CGRect(x: wall.x - thickness / 2,
-                                                  y: bottom,
-                                                  width: thickness,
-                                                  height: top - bottom),
-                                     gapFacesTop: gapFacesTop[index],
-                                     rng: &rng))
+            let trunk = makeTrunk(rect: CGRect(x: wall.x - thickness / 2,
+                                               y: bottom,
+                                               width: thickness,
+                                               height: top - bottom),
+                                  gapFacesTop: gapFacesTop[index],
+                                  rng: &rng)
+            walls.addChild(trunk.node)
+            silhouettes.append(trunk.silhouette)
         }
 
         // Musgo lunar en los dos bordes del hueco. Señala la **puerta**, no la pared:
@@ -1448,6 +1482,24 @@ final class GameScene: SKScene {
         }
         walls.alpha = wallAlpha(for: chunk)
         container.addChild(walls)
+
+        // El eco: la misma silueta del tronco —la que mata—, en frío y por encima
+        // del velo, mientras el juego aún está enseñando la mecánica a ciegas. No
+        // cuelga de `walls` a propósito: ese nodo se apaga con la oscuridad, y el
+        // eco tiene que hacer justo lo contrario.
+        if chunk.isBlind, !silhouettes.isEmpty {
+            let echo = SKNode()
+            echo.name = Self.echoNodeName
+            echo.zPosition = Self.echoZPosition
+            echo.alpha = 0
+            for silhouette in silhouettes {
+                let shape = SKShapeNode(path: silhouette)
+                shape.fillColor = Palette.blindEcho
+                shape.strokeColor = .clear
+                echo.addChild(shape)
+            }
+            container.addChild(echo)
+        }
 
         // Las flores quedan POR ENCIMA del velo: una flor de luna es una luz, y en la
         // oscuridad las luces son justo lo que sí se ve. Además es lo que hace la
@@ -1525,7 +1577,12 @@ final class GameScene: SKScene {
     /// irregular, y el muñón de rama y los nudos son masa que ya estaba ahí, nunca
     /// añadida fuera. Lo que se ve tiene que ser exactamente lo que mata (pilar 2 del
     /// GDD): la decoración solo puede quitar superficie, jamás añadirla.
-    private func makeTrunk(rect: CGRect, gapFacesTop: Bool, rng: inout SplitMix64) -> SKNode {
+    ///
+    /// Devuelve también esa silueta: es lo que dibuja el eco de aprendizaje de las
+    /// zonas a ciegas, y tiene que ser exactamente la misma forma, no una
+    /// aproximación rectangular.
+    private func makeTrunk(rect: CGRect, gapFacesTop: Bool,
+                           rng: inout SplitMix64) -> (node: SKNode, silhouette: CGPath) {
         let node = SKNode()
 
         // Los dos cantos verticales, tallados con muescas deterministas por chunk.
@@ -1610,7 +1667,7 @@ final class GameScene: SKScene {
         stumpCap.alpha = 0.55
         node.addChild(stumpCap)
 
-        return node
+        return (node, bodyPath)
     }
 
     /// Puntos de un canto vertical del tronco, con muescas de corteza que muerden
@@ -1738,10 +1795,14 @@ final class GameScene: SKScene {
     private static let flowersNodeName = "flowers"
     private static let corollaNodeName = "corolla"
     private static let stemNodeName = "stem"
+    private static let echoNodeName = "echo"
     private static let mossThickness: CGFloat = 10
     /// Cuánto cuelga la liana por cada punto de holgura.
     private static let ropeSagFactor: CGFloat = 0.9
     private static let lightZPosition: CGFloat = 20
+    /// Justo por encima del velo (10) y por debajo de las luces (20): el eco tiene
+    /// que atravesar la oscuridad, pero nunca taparle nada a Lumi ni a las flores.
+    private static let echoZPosition: CGFloat = 11
 
     /// La flor que está al alcance se abre y brilla. Enseña el radio de agarre
     /// jugando, sin cartel: pulsar cuando algo está abierto engancha, y el jugador

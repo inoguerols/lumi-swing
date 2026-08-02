@@ -346,6 +346,30 @@ enum Tuning {
         static let noticeThreshold: Int = 6
     }
 
+    // MARK: - Aprendizaje de la mecánica a ciegas
+    //
+    // El eco: en las primeras zonas a ciegas que vive el jugador, los muros
+    // invisibles dejan una silueta tenue y fría que late con el pulso háptico de
+    // proximidad. Ver el muro latir mientras se siente el pulso es lo que enseña
+    // la correlación; después se retira y la zona vuelve a ser a ciegas de verdad.
+
+    enum BlindTeaching {
+        /// Opacidad del eco en la primera zona a ciegas de la vida del jugador.
+        /// Alta para que se vea sin buscarlo, baja para que siga leyéndose como
+        /// eco y no como "muro visible" (un muro normal va a 1,0).
+        static let initialAlpha: CGFloat = 0.35
+
+        /// Cuántas zonas a ciegas dura la enseñanza. El eco decae linealmente
+        /// desde `initialAlpha` a lo largo de estas zonas; a partir de la nº
+        /// `teachingZones` (contando desde 0) es exactamente 0 para siempre.
+        static let teachingZones: Int = 6
+
+        /// Qué fracción de su opacidad conserva el eco en el valle del latido.
+        /// Es la profundidad del pulso: a 1 no latiría, a 0 desaparecería entre
+        /// pulso y pulso y se leería como parpadeo roto en vez de respiración.
+        static let pulseFloor: CGFloat = 0.35
+    }
+
     // MARK: - Háptica
     //
     // La spec completa y el porqué de cada valor están en docs/lenguaje-haptico.md.
