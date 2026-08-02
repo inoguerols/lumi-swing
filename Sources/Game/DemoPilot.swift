@@ -16,25 +16,27 @@ enum DemoPilot {
 
     /// Plan para la seed del juego, calculado una vez por proceso al primer uso
     /// (solo lo toca el path de demo, así que una partida normal no paga nada).
-    static let plan: [Bool] = searchPlan(seed: Tuning.WorldGen.initialSeed, targetWalls: 20)
+    /// El objetivo es en puntos, y a ciegas valen doble: 26 ≈ muro 18 — de sobra
+    /// para el arco del clip (puertas → oscuridad → travesía → vuelta a la luz).
+    static let plan: [Bool] = searchPlan(seed: Tuning.WorldGen.initialSeed, targetScore: 26)
 
-    static func searchPlan(seed: UInt64, targetWalls: Int) -> [Bool] {
+    static func searchPlan(seed: UInt64, targetScore: Int) -> [Bool] {
         var base = GameSimulation(seed: seed)
         var plan: [Bool] = []
         var rng = SplitMix64(seed: 0xDE_0B_07)
 
-        while base.score < targetWalls {
+        while base.score < targetScore {
             let objetivo = base.score + 1
             var logrado = false
 
-            for _ in 0..<800 where !logrado {
+            for _ in 0..<4000 where !logrado {
                 var sim = base
                 var segmento: [Bool] = []
                 var holding = false
                 var untilNextDecision: CGFloat = 0
                 var elapsed: CGFloat = 0
 
-                while elapsed < 6, !sim.isDead, sim.score < objetivo {
+                while elapsed < 8, !sim.isDead, sim.score < objetivo {
                     if untilNextDecision <= 0 {
                         holding = rng.nextCGFloat(in: 0...1) < 0.5
                         untilNextDecision = rng.nextCGFloat(in: 0.05...0.35)
@@ -52,7 +54,7 @@ enum DemoPilot {
                 }
             }
 
-            // ponytail: si un muro se resiste tras 800 intentos, el plan llega
+            // ponytail: si un muro se resiste tras 4000 intentos, el plan llega
             // hasta donde llegue y la escena cae al heurístico antiguo.
             if !logrado { break }
         }

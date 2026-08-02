@@ -64,9 +64,22 @@ actor AudioCueEngine {
 
         try? AVAudioSession.sharedInstance().setActive(true)
         try? engine.start()
+        // Si el arranque falló (p. ej. sesión aún secuestrada), tocar los players
+        // lanzaría NSException — el mismo crash de abajo, en el otro sentido.
+        guard engine.isRunning else { return }
         cuePlayer.play()
         tonePlayer.play()
         toneActive = false
+    }
+
+    /// `stop()` + `play()` deja el nodo armado para el siguiente `scheduleBuffer`.
+    /// Pero `play()` con el `AVAudioEngine` parado lanza NSException (no un Error):
+    /// al suspender la app el sistema para el motor, y el `stopContinuous()` del
+    /// observador de scenePhase crasheaba en background (TestFlight, 2026-08-02).
+    private func rearm(_ player: AVAudioPlayerNode) {
+        player.stop()
+        guard engine.isRunning else { return }
+        player.play()
     }
 
     func enableSubstitution() {
@@ -96,16 +109,14 @@ actor AudioCueEngine {
                 toneActive = true
             }
         } else if toneActive {
-            tonePlayer.stop()
-            tonePlayer.play()
+            rearm(tonePlayer)
             toneActive = false
         }
     }
 
     func stopContinuous() {
         guard running else { return }
-        tonePlayer.stop()
-        tonePlayer.play()
+        rearm(tonePlayer)
         toneActive = false
     }
 
