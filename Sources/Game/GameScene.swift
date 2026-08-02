@@ -27,9 +27,20 @@ final class GameScene: SKScene {
     /// `Tuning.Player.radius`, que sigue siendo **el** radio de colisión (la cuenta
     /// está en `Tuning.Scenery.bodyRadius`). Lo que asoma fuera —bloom, motas,
     /// halo, estela— es luz difusa, nunca masa. `haloNode` va detrás de todo y es el
-    /// único que late con el parpadeo.
+    /// único que late con el pulso háptico; las tres capas de luz parpadean además
+    /// con el aura viva (`updateAura`).
     private let playerNode = SKNode()
     private let haloNode = SKSpriteNode()
+    /// Las tres capas de luz difusa (ambiente, puente y halo) cuelgan de este grupo
+    /// y no directamente del jugador: la deriva del aura mueve la luz entera sin
+    /// tocar cuerpo ni cara — la masa dibujada no puede salirse del círculo que mata.
+    private let lightGroup = SKNode()
+    /// Estado del aura viva: capas con su alpha base y sus fases sorteadas, reloj
+    /// propio y envolvente del pulso háptico (1 en el pico, decae linealmente a 0).
+    private var auraLayers: [(node: SKSpriteNode, baseAlpha: CGFloat, seed: Effects.AuraLayerSeed)] = []
+    private var auraTime: CGFloat = 0
+    private var haloPulse: CGFloat = 0
+    private var haloPulseDuration: CGFloat = 1
     private let bodyGroup = SKNode()
     /// La cara (solo los ojos): vive fuera de `bodyGroup` para no estirarse con
     /// la velocidad, pero `updatePose` la ladea una fracción del giro del cuerpo.
@@ -329,6 +340,11 @@ final class GameScene: SKScene {
     private func buildFirefly() {
         lightTexture = Self.makeLightTexture()
 
+        // Las capas de luz difusa van en su propio grupo: `updateAura` lo hace
+        // derivar 1-2 pt alrededor del cuerpo, como la luz de una llama.
+        playerNode.addChild(lightGroup)
+        var auraRng = SplitMix64(seed: 0xA0_9A)
+
         // Luz ambiente primero: el halo más ancho y más tenue, el que hace que la
         // luz BAÑE el fondo — el verde de la selva se aclara alrededor de Lumi
         // porque este sprite aditivo se dibuja encima de troncos y dosel (el
@@ -342,7 +358,9 @@ final class GameScene: SKScene {
         ambient.colorBlendFactor = 1
         ambient.blendMode = .add
         ambient.alpha = Tuning.Scenery.ambientAlpha
-        playerNode.addChild(ambient)
+        lightGroup.addChild(ambient)
+        auraLayers.append((ambient, Tuning.Scenery.ambientAlpha,
+                           Effects.AuraLayerSeed(rng: &auraRng)))
 
         // Halo intermedio: entre el halo pegado al cuerpo (1,8·r) y la luz
         // ambiente (4,6·r) quedaba un escalón visible — la zona brillante
@@ -355,9 +373,11 @@ final class GameScene: SKScene {
         midHalo.colorBlendFactor = 1
         midHalo.blendMode = .add
         midHalo.alpha = Tuning.Scenery.midHaloAlpha
-        playerNode.addChild(midHalo)
+        lightGroup.addChild(midHalo)
+        auraLayers.append((midHalo, Tuning.Scenery.midHaloAlpha,
+                           Effects.AuraLayerSeed(rng: &auraRng)))
 
-        // Halo después: aditivo, y el único nodo que el parpadeo toca (ver
+        // Halo después: aditivo, y el único nodo al que llega el pulso háptico (ver
         // `updateBlink`). Es un sprite con la textura difusa y no un círculo: un
         // disco aditivo con canto duro se lee como un aro. Con el ambiente, el
         // halo y las capas de bloom del cuerpo, la luz cae en tres radios y tres
@@ -369,7 +389,9 @@ final class GameScene: SKScene {
         haloNode.colorBlendFactor = 1
         haloNode.blendMode = .add
         haloNode.alpha = Tuning.Scenery.haloDimAlpha
-        playerNode.addChild(haloNode)
+        lightGroup.addChild(haloNode)
+        auraLayers.append((haloNode, Tuning.Scenery.haloDimAlpha,
+                           Effects.AuraLayerSeed(rng: &auraRng)))
 
         // Las motas cuelgan del jugador, no del cuerpo: no rotan con la pose ni se
         // estiran con la velocidad, porque son aire iluminado, no anatomía.
@@ -784,20 +806,51 @@ final class GameScene: SKScene {
         blinkTimer -= dt
         if blinkTimer <= 0 {
             blinkTimer = interval
-            haloNode.removeAllActions()
-            haloNode.alpha = Tuning.Scenery.haloBrightAlpha
-            haloNode.setScale(Tuning.Scenery.haloBrightScale)
-            let duration = TimeInterval(interval) * 0.6
-            haloNode.run(.fadeAlpha(to: Tuning.Scenery.haloDimAlpha, duration: duration))
-            haloNode.run(.scale(to: Tuning.Scenery.haloDimScale, duration: duration))
+            // El pulso ya no es un SKAction sino una envolvente por frame: así
+            // `updateAura` puede componerlo ENCIMA del parpadeo orgánico sin que
+            // uno pise al otro (el pico del pulso manda; la base respira).
+            haloPulse = 1
+            haloPulseDuration = interval * Tuning.Scenery.haloPulseDecayFraction
 
             // El agujero de luz del velo late con la misma cadencia: la oscuridad
             // entera se convierte en el Taptic Engine hecho visible, para quien
             // juega con el móvil sobre la mesa y no lo tiene en la mano.
+            let duration = TimeInterval(haloPulseDuration)
             darknessNode.removeAllActions()
             darknessNode.setScale(1 - Tuning.BlindZone.breatheAmplitude)
             darknessNode.run(.scale(to: 1 + Tuning.BlindZone.breatheAmplitude, duration: duration))
         }
+    }
+
+    /// El aura viva: las tres capas de luz parpadean con osciladores deterministas
+    /// desfasados (respiración, temblor y caídas tipo vela) y el centro luminoso
+    /// deriva 1-2 pt respecto al cuerpo. Sobre esa base se suma el pulso háptico
+    /// del halo, que en su pico pisa al parpadeo (lerp hacia el brillo pleno): la
+    /// información de juego destaca sobre la vida, nunca al revés.
+    private func updateAura(dt: CGFloat) {
+        auraTime += dt
+        let amplitude = reduceMotion ? Tuning.Scenery.auraReduceMotionFactor : 1
+        for layer in auraLayers {
+            let flicker = Effects.auraFlicker(time: auraTime,
+                                              seed: layer.seed,
+                                              amplitudeScale: amplitude)
+            let scale = 1 + (flicker - 1) * Tuning.Scenery.auraScaleFraction
+            if layer.node === haloNode {
+                layer.node.alpha = lerp(layer.baseAlpha * flicker,
+                                        Tuning.Scenery.haloBrightAlpha,
+                                        haloPulse)
+                layer.node.setScale(lerp(Tuning.Scenery.haloDimScale * scale,
+                                         Tuning.Scenery.haloBrightScale,
+                                         haloPulse))
+            } else {
+                layer.node.alpha = layer.baseAlpha * flicker
+                layer.node.setScale(scale)
+            }
+        }
+        lightGroup.position = Effects.auraDrift(time: auraTime, amplitudeScale: amplitude)
+        // La envolvente decae DESPUÉS de aplicarse: el frame del pulso muestra el
+        // pico exacto, incluso con los intervalos más cortos de proximidad.
+        haloPulse = max(0, haloPulse - dt / max(haloPulseDuration, Tuning.Pendulum.physicsStep))
     }
 
     /// Fuera de partida (menú, game over) no hay física que avanzar, pero el
@@ -806,6 +859,7 @@ final class GameScene: SKScene {
     /// por muro de `updateSky()`, que aquí no tiene muros que contar.
     private func updateMenuAmbience(dt: CGFloat, time: TimeInterval) {
         updateBlink(dt: dt)
+        updateAura(dt: dt)
         swayStems(time: time)
         let phase = (time.truncatingRemainder(dividingBy: TimeInterval(Tuning.Scenery.menuSkyCycleDuration)))
             / TimeInterval(Tuning.Scenery.menuSkyCycleDuration)
@@ -930,6 +984,7 @@ final class GameScene: SKScene {
         updatePose(dt: dt)
         updateSparks(dt: dt)
         updateBlink(dt: dt)
+        updateAura(dt: dt)
         feedHapticMap()
         syncWorld()
         updateParallax()
@@ -1048,6 +1103,9 @@ final class GameScene: SKScene {
         trailPositions.removeAll()
         trailTimer = 0
         sparkTimer = 0
+        // El aura arranca la partida desde la base, sin un pico heredado; su reloj
+        // (`auraTime`) NO se resetea: la luz sigue viva sin costura entre menú y run.
+        haloPulse = 0
         playerNode.removeAllActions()
         playerNode.xScale = 1
         playerNode.yScale = 1

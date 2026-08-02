@@ -662,6 +662,42 @@ enum Tuning {
         static let haloBrightScale: CGFloat = 1.05
         /// Cadencia del parpadeo ocioso, cuando no hay muro del que avisar.
         static let idleBlinkInterval: CGFloat = 1.6
+        /// Fracción del intervalo de parpadeo que tarda el pico del pulso en
+        /// volver a la base: más alto = latido más lánguido.
+        static let haloPulseDecayFraction: CGFloat = 0.6
+
+        // Aura viva: parpadeo orgánico de las tres capas de luz (ambiente,
+        // puente y halo), suma de tres osciladores deterministas. Es la base
+        // sobre la que destaca el pulso háptico, nunca su sustituto.
+
+        /// Periodo de la respiración lenta del aura, en segundos.
+        static let auraBreathPeriod: CGFloat = 3.4
+        /// Amplitud (± fracción de alpha) de la respiración: la parte más visible.
+        static let auraBreathAmplitude: CGFloat = 0.16
+        /// Periodo del temblor rápido, tipo llama que vibra.
+        static let auraTremorPeriod: CGFloat = 0.55
+        /// Amplitud del temblor: apenas perceptible, solo quita la fijeza.
+        static let auraTremorAmplitude: CGFloat = 0.07
+        /// Cada cuántos segundos llega una caída de luz tipo vela.
+        static let auraDipPeriod: CGFloat = 7.5
+        /// Cuánto cae la luz en el valle de esa caída (fracción de alpha).
+        static let auraDipDepth: CGFloat = 0.30
+        /// Exponente que estrecha la caída: más alto = valle más breve y puntual.
+        static let auraDipExponent: CGFloat = 6
+        /// Suelo y techo del factor de parpadeo: el aura vive, no estroboscopea.
+        static let auraFlickerMin: CGFloat = 0.55
+        static let auraFlickerMax: CGFloat = 1.30
+        /// Qué fracción del parpadeo de alpha se traslada a la escala de la capa.
+        static let auraScaleFraction: CGFloat = 0.35
+        /// Jitter (± fracción) del periodo por capa: rompe cualquier unísono.
+        static let auraLayerPeriodJitter: CGFloat = 0.15
+        /// Deriva posicional del centro luminoso respecto al cuerpo, en puntos.
+        static let auraDriftAmplitude: CGFloat = 1.5
+        /// Periodos inconmensurables de la deriva en x e y: la luz nunca repite ruta.
+        static let auraDriftPeriodX: CGFloat = 5.3
+        static let auraDriftPeriodY: CGFloat = 7.1
+        /// Con Reduce Motion las amplitudes del aura se reducen a esta fracción.
+        static let auraReduceMotionFactor: CGFloat = 0.5
     }
 
     // MARK: - HUD dentro de la escena
