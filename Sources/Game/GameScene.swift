@@ -861,11 +861,15 @@ final class GameScene: SKScene {
         // si se saliera aquí el temblor se calcularía una sola vez y la cámara se
         // quedaría congelada descentrada — el efecto no se veía nunca y parecía un
         // salto de cámara roto.
-        if let previous = lastUpdateTime, model.phase != .playing {
+        if let previous = lastUpdateTime, model.phase != .playing, model.phase != .paused {
             settleShake(dt: CGFloat(currentTime - previous))
             // Sin física que avanzar, el mundo detrás del menú no puede quedarse
             // congelado (F6): tallos, halo y cielo siguen su curso propio. Nada
             // de esto toca `simulation` ni el HUD, así que no rompe el game over.
+            //
+            // En pausa NO: aquí sí tiene que congelarse todo, ambiente incluido —
+            // es lo que separa "estoy en el menú" de "he dejado la partida a
+            // medias y voy a volver a ella".
             updateMenuAmbience(dt: CGFloat(currentTime - previous), time: currentTime)
         }
         guard model.phase == .playing else { return }
@@ -1010,6 +1014,34 @@ final class GameScene: SKScene {
     /// puede quedarse renegociado a 60 Hz. Re-pedir 120 al volver es gratis.
     func refreshFrameRate() {
         view?.preferredFramesPerSecond = 120
+    }
+
+    // MARK: - Pausa por interrupción
+
+    /// El sistema deja de estar activo en plena partida (fondo, notificación a
+    /// pantalla completa, llamada, App Switcher). `isPaused` congela las
+    /// `SKAction` de ambiente (respiración, parpadeo, deriva del polen) — pero
+    /// SpriteKit sigue llamando a `update(_:)` con `isPaused = true` (no lo
+    /// detiene), así que la simulación se congela por su cuenta: la guarda de
+    /// `update(_:)` deja de avanzarla en cuanto el shell mueve `model.phase` a
+    /// `.paused`. Suelta cualquier agarre pendiente para que la partida no
+    /// vuelva con el dedo "puesto" sobre una flor que ya no se está tocando.
+    func pauseForInterruption() {
+        holding = false
+        isPaused = true
+    }
+
+    /// Solo la llama el botón «Continuar». SKView se reactiva solo al volver a
+    /// primer plano (por eso el shell reafirma `isPaused = true` ahí si seguimos
+    /// en pausa) — pero nunca reanuda la partida por su cuenta: eso solo pasa
+    /// aquí. `lastUpdateTime = nil` descarta el tiempo pasado en pausa para que
+    /// el primer frame tras reanudar no devore un `dt` gigante, y `holding =
+    /// false` asegura que el toque que soltó «Continuar» no se cuele como un
+    /// agarre.
+    func resumeFromPause() {
+        holding = false
+        lastUpdateTime = nil
+        isPaused = false
     }
 
     private func finishIntro() {

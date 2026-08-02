@@ -34,6 +34,18 @@
         }
       }
     },
+    "Continuar": {
+      "comment": "Único botón del overlay de pausa al volver de segundo plano en plena partida.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume"
+          }
+        }
+      }
+    },
     "En las zonas a ciegas los muros no se ven: el ritmo de las vibraciones dice a qué distancia está el muro, y una textura continua avisa de que pasas por el hueco.": {
       "extractionState": "manual",
       "localizations": {
