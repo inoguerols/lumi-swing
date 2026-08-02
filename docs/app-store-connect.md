@@ -178,3 +178,23 @@ app — así decides tú el día en que aparece.
   dilo si lo quieres.
 - Para actualizar: sube la versión en `project.yml` (`MARKETING_VERSION`), archiva
   y crea una versión nueva en App Store Connect.
+
+## 9. Release automatizado (desde 2026-08-02)
+
+El camino manual de arriba (§7) ya no hace falta:
+
+1. **Merge/push a `main`** → Xcode Cloud compila, firma y sube la build a
+   TestFlight él solo (workflow "Default", distribución `APP_STORE_ELIGIBLE`;
+   `ci_scripts/ci_post_clone.sh` genera el proyecto con XcodeGen).
+2. **Enviar a revisión** (cuando la versión en ASC está editable):
+
+   ```bash
+   python3 "$(pwd)/scripts/asc-release.py" --whats-new "Novedades en español" --whats-new-en "What's new"
+   ```
+
+   Engancha la última build VALID, la asegura en los grupos internos de
+   TestFlight, actualiza las novedades (es+en) y crea+envía el reviewSubmission.
+   `--status` para mirar sin tocar. Credenciales: `~/.appstoreconnect/asc-api-key.json`.
+
+Para una versión nueva (p. ej. 1.1) hay que crear antes la versión en ASC
+(POST appStoreVersions o desde la web) y subir capturas si cambiaron.
