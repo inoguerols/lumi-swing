@@ -195,6 +195,29 @@ struct MenuView: View {
     }
 }
 
+// MARK: - Pausa
+
+/// Se planta encima de la escena congelada cuando el sistema interrumpe una
+/// partida en curso (fondo, notificación a pantalla completa, llamada). Un único
+/// botón: sin cuenta atrás ni más opciones, para no dar tiempo a chocar por las
+/// prisas ni a rehacer ajustes a medio salto.
+struct PauseOverlayView: View {
+    let onResume: () -> Void
+
+    var body: some View {
+        ZStack {
+            // Verde noche translúcido y no negro puro: el mundo congelado detrás
+            // sigue siendo parte de la escena, no una pantalla de sistema encima.
+            Color(red: 0.06, green: 0.15, blue: 0.14).opacity(0.82)
+                .ignoresSafeArea()
+
+            Card {
+                PrimaryButton(title: "Continuar", action: onResume)
+            }
+        }
+    }
+}
+
 // MARK: - Game over
 
 struct GameOverView: View {

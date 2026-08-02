@@ -75,6 +75,14 @@ struct RootView: View {
             case .playing:
                 EmptyView()
 
+            case .paused:
+                // El juego congelado se ve detrás (la escena ya está en
+                // `isPaused`, ver `GameScene.pauseForInterruption`): esta capa solo
+                // oscurece y ofrece la única salida — sin cuenta atrás, sin más
+                // botones (chocarías igual si reanudara sola).
+                PauseOverlayView(onResume: resumeRun)
+                    .transition(.opacity)
+
             case .dead:
                 GameOverView(score: model.score,
                              best: model.best,
@@ -99,11 +107,21 @@ struct RootView: View {
                 // display link renegocia a 60 Hz con la interrupción y nadie
                 // vuelve a pedir 120. Re-pedirlo es gratis; validar en device.
                 scene.refreshFrameRate()
+                // SKView se reanuda solo al volver a primer plano — si la partida
+                // se quedó en pausa, hay que reafirmar `isPaused` aquí mismo o el
+                // jugador se encontraría el mundo moviéndose otra vez detrás del
+                // overlay, o peor, chocando antes de poder pulsar «Continuar».
+                if model.phase == .paused { scene.pauseForInterruption() }
             } else {
                 // Un continuous vibrando en background es un bug reportable, y un
                 // AVAudioEngine que creemos vivo mientras el sistema lo para es el
                 // crash de la build 7: se apagan los dos canales a la vez.
                 Task { await engine.suspend() }
+                // La pausa real (spec «pausa-background»): una partida en curso no
+                // puede seguir corriendo sin pantalla, y no debe reanudarse sola al
+                // volver — solo el botón «Continuar» la libera.
+                model.pauseIfPlaying()
+                scene.pauseForInterruption()
             }
         }
         // El motor filtra cada canal por su cuenta, así que hápticos OFF + sonido ON
@@ -153,5 +171,10 @@ struct RootView: View {
     private func showMenu() {
         model.phase = .menu
         scene.showMenuBackdrop()
+    }
+
+    private func resumeRun() {
+        scene.resumeFromPause()
+        model.resumeIfPaused()
     }
 }

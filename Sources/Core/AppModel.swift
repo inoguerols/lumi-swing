@@ -6,7 +6,7 @@ import Observation
 @MainActor
 final class AppModel {
     enum Phase {
-        case intro, menu, playing, dead
+        case intro, menu, playing, paused, dead
     }
 
     /// Arranca en `.intro` (el plano de apertura); el shell lo baja a `.menu` en
@@ -35,5 +35,18 @@ final class AppModel {
         settings.record(paceMetersPerSecond: pace)
         GameCenter.submit(score: score, paceMetersPerSecond: pace)
         phase = .dead
+    }
+
+    /// Pausa real ante una interrupción (fondo, notificación a pantalla completa,
+    /// llamada): solo pausa si había una partida en curso, y solo un toque de
+    /// «Continuar» la libera — nunca sola, así el jugador no se choca al volver.
+    func pauseIfPlaying() {
+        guard phase == .playing else { return }
+        phase = .paused
+    }
+
+    func resumeIfPaused() {
+        guard phase == .paused else { return }
+        phase = .playing
     }
 }
