@@ -63,7 +63,7 @@ actor CoreHapticsEngine: HapticsEngine {
         }
 
         let supported = CHHapticEngine.capabilitiesForHardware().supportsHaptics
-        await audio.prepare(substituting: !supported)
+        await audio.start(substituting: !supported)
         guard supported else { return }
 
         do {
@@ -121,8 +121,10 @@ actor CoreHapticsEngine: HapticsEngine {
 
         let supported = CHHapticEngine.capabilitiesForHardware().supportsHaptics
         // La interrupción también se lleva la AVAudioSession y el AVAudioEngine: sin
-        // esto el canal de sonido vuelve mudo aunque los hápticos revivan.
-        await audio.reactivate(substituting: !supported)
+        // esto el canal de sonido vuelve mudo aunque los hápticos revivan. Va antes
+        // que los hápticos porque es el orden que exige el audio: sesión → motor →
+        // players; si falla, se reintenta en el siguiente evento de ciclo de vida.
+        await audio.start(substituting: !supported)
 
         guard supported, !isRunning else { return }
         guard let engine else {
@@ -309,6 +311,15 @@ actor CoreHapticsEngine: HapticsEngine {
         }
         alignmentActive = false
         await audio.stopContinuous()
+    }
+
+    /// Irse a background. `stopContinuous()` calla lo que vibra; esto además apaga
+    /// el audio del todo, para que la vuelta a primer plano rehaga sesión y motor
+    /// en orden en vez de encontrarse un `AVAudioEngine` que el sistema paró por
+    /// debajo (crash de la build 7 al volver de background).
+    func suspend() async {
+        await stopContinuous()
+        await audio.suspend()
     }
 
     // MARK: - Patrones

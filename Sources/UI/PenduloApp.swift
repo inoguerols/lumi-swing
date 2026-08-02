@@ -100,8 +100,10 @@ struct RootView: View {
                 // vuelve a pedir 120. Re-pedirlo es gratis; validar en device.
                 scene.refreshFrameRate()
             } else {
-                // Un continuous vibrando en background es un bug reportable.
-                Task { await engine.stopContinuous() }
+                // Un continuous vibrando en background es un bug reportable, y un
+                // AVAudioEngine que creemos vivo mientras el sistema lo para es el
+                // crash de la build 7: se apagan los dos canales a la vez.
+                Task { await engine.suspend() }
             }
         }
         // El motor filtra cada canal por su cuenta, así que hápticos OFF + sonido ON

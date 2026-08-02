@@ -7,6 +7,14 @@ import CoreGraphics
 /// música del jugador. Forzar `.playback` para colar nuestros pitidos en modo
 /// silencio sería hostil, y el diseño no lo necesita — el mapa es táctil, el
 /// audio solo acompaña (docs/lenguaje-haptico.md §6.2).
+///
+/// **Regla del actor**: `AVAudioPlayerNode.play()` con el motor parado no
+/// devuelve un `Error`, lanza una NSException que mata el proceso. Y
+/// `engine.isRunning` no sirve como salvoconducto: tras suspender la app el
+/// sistema para el motor por debajo y el flag puede seguir diciendo `true`
+/// (crash de TestFlight en build 7, al volver a primer plano). Por eso `play()`
+/// vive en **un solo sitio**, `ensureActive()`, justo detrás de un
+/// `try engine.start()` que no ha lanzado; ninguna ruta de parada lo toca.
 actor AudioCueEngine {
 
     private let engine = AVAudioEngine()
@@ -18,68 +26,83 @@ actor AudioCueEngine {
     private var alignmentTone: AVAudioPCMBuffer?
 
     private var gain: CGFloat = Tuning.Audio.reinforcementGain
-    private var running = false
+    private var graphReady = false
+    /// Motor arrancado por nosotros en esta sesión de primer plano. No es un
+    /// espejo de `engine.isRunning`: es lo que sabemos con certeza.
+    private(set) var isActive = false
     private var toneActive = false
 
     private static let sampleRate = 44_100.0
 
-    func prepare(substituting: Bool) {
+    /// Arranque en frío y vuelta de una interrupción: el mismo camino, porque el
+    /// orden correcto (sesión → motor → players) es el mismo en los dos casos.
+    func start(substituting: Bool) {
         gain = substituting ? Tuning.Audio.substituteGain : Tuning.Audio.reinforcementGain
+        ensureActive()
+    }
 
-        guard !running else { return }
+    /// Irse a background. Deja el audio explícitamente muerto para que la vuelta
+    /// rehaga el ciclo completo en vez de fiarse de un flag que puede mentir.
+    func suspend() {
+        toneActive = false
+        guard isActive else { return }
+        isActive = false
+        cuePlayer.stop()
+        tonePlayer.stop()
+        engine.stop()
+    }
+
+    /// La única puerta que toca `play()`. Si algo del arranque falla, devuelve
+    /// `false` y no se toca ningún player: el audio se queda mudo hasta el
+    /// siguiente evento (scenePhase `.active` o la siguiente señal de juego), que
+    /// es infinitamente mejor que un `play()` "a ver si cuela".
+    @discardableResult
+    private func ensureActive() -> Bool {
+        guard buildGraph() else { return false }
+        if isActive, engine.isRunning { return true }
+
+        isActive = false
+        toneActive = false
+        cuePlayer.stop()
+        tonePlayer.stop()
         do {
-            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
-
-            guard let format = AVAudioFormat(standardFormatWithSampleRate: Self.sampleRate,
-                                             channels: 1) else { return }
-            engine.attach(cuePlayer)
-            engine.attach(tonePlayer)
-            engine.connect(cuePlayer, to: engine.mainMixerNode, format: format)
-            engine.connect(tonePlayer, to: engine.mainMixerNode, format: format)
-
-            buildBuffers(format: format)
+            let session = AVAudioSession.sharedInstance()
+            // La categoría se repite a propósito: un reset de media services la
+            // devuelve a la de por defecto.
+            try session.setCategory(.ambient, mode: .default)
+            try session.setActive(true)
             try engine.start()
-            cuePlayer.play()
-            tonePlayer.play()
-            running = true
         } catch {
             // Sin audio el juego sigue siendo jugable con hápticos. No es fatal.
-            running = false
+            return false
         }
-    }
+        guard engine.isRunning else { return false }
 
-    /// Una llamada o Siri desactivan la sesión y paran el `AVAudioEngine`; volver a
-    /// primer plano no lo revive solo. Barato cuando no hace falta.
-    ///
-    /// ponytail: se fía de `engine.isRunning` como síntoma de la interrupción. Si
-    /// apareciera un caso con sesión caída y motor "corriendo", habría que
-    /// suscribirse a `AVAudioSession.interruptionNotification`.
-    func reactivate(substituting: Bool) {
-        guard running else {
-            prepare(substituting: substituting)
-            return
-        }
-        guard !engine.isRunning else { return }
-
-        try? AVAudioSession.sharedInstance().setActive(true)
-        try? engine.start()
-        // Si el arranque falló (p. ej. sesión aún secuestrada), tocar los players
-        // lanzaría NSException — el mismo crash de abajo, en el otro sentido.
-        guard engine.isRunning else { return }
         cuePlayer.play()
         tonePlayer.play()
-        toneActive = false
+        isActive = true
+        return true
     }
 
-    /// `stop()` + `play()` deja el nodo armado para el siguiente `scheduleBuffer`.
-    /// Pero `play()` con el `AVAudioEngine` parado lanza NSException (no un Error):
-    /// al suspender la app el sistema para el motor, y el `stopContinuous()` del
-    /// observador de scenePhase crasheaba en background (TestFlight, 2026-08-02).
-    private func rearm(_ player: AVAudioPlayerNode) {
-        player.stop()
-        guard engine.isRunning else { return }
-        player.play()
+    /// Deja el player en condiciones de recibir `scheduleBuffer`. El `play()` que
+    /// lo rearma sale de `ensureActive()`, nunca de una ruta de parada.
+    private func armed(_ player: AVAudioPlayerNode) -> Bool {
+        guard ensureActive() else { return false }
+        if !player.isPlaying { player.play() }
+        return true
+    }
+
+    private func buildGraph() -> Bool {
+        if graphReady { return true }
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: Self.sampleRate,
+                                         channels: 1) else { return false }
+        engine.attach(cuePlayer)
+        engine.attach(tonePlayer)
+        engine.connect(cuePlayer, to: engine.mainMixerNode, format: format)
+        engine.connect(tonePlayer, to: engine.mainMixerNode, format: format)
+        buildBuffers(format: format)
+        graphReady = true
+        return true
     }
 
     func enableSubstitution() {
@@ -87,7 +110,7 @@ actor AudioCueEngine {
     }
 
     func play(_ signal: HapticSignal) {
-        guard running, let buffer = buffers[signal] else { return }
+        guard armed(cuePlayer), let buffer = buffers[signal] else { return }
         cuePlayer.volume = Float(gain)
         cuePlayer.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
     }
@@ -95,29 +118,32 @@ actor AudioCueEngine {
     /// Un click por pulso, con la misma cadencia que los hápticos: el ritmo es la
     /// información, así que el sustituto tiene que respetarlo exactamente.
     func playProximityClick(intensity: CGFloat) {
-        guard running, let click = proximityClick else { return }
+        guard armed(cuePlayer), let click = proximityClick else { return }
         cuePlayer.volume = Float(gain * intensity)
         cuePlayer.scheduleBuffer(click, at: nil, options: [], completionHandler: nil)
     }
 
     func updateAlignment(intensity: CGFloat?) {
-        guard running, let tone = alignmentTone else { return }
-        if let intensity {
-            tonePlayer.volume = Float(gain * intensity * Tuning.Audio.alignToneGain * 16)
-            if !toneActive {
-                tonePlayer.scheduleBuffer(tone, at: nil, options: [.loops], completionHandler: nil)
-                toneActive = true
-            }
-        } else if toneActive {
-            rearm(tonePlayer)
-            toneActive = false
+        guard let intensity else {
+            stopContinuous()
+            return
+        }
+        guard armed(tonePlayer), let tone = alignmentTone else { return }
+        tonePlayer.volume = Float(gain * intensity * Tuning.Audio.alignToneGain * 16)
+        if !toneActive {
+            tonePlayer.scheduleBuffer(tone, at: nil, options: [.loops], completionHandler: nil)
+            toneActive = true
         }
     }
 
+    /// Callar la textura de alineación. `stop()` descarta lo programado y deja el
+    /// nodo parado; volver a armarlo es cosa del siguiente `updateAlignment`.
+    /// Aquí NO se llama a `play()`: esta era la ruta del crash (background →
+    /// `setChannels` → `stopContinuous`).
     func stopContinuous() {
-        guard running else { return }
-        rearm(tonePlayer)
         toneActive = false
+        guard isActive else { return }
+        tonePlayer.stop()
     }
 
     // MARK: - Síntesis

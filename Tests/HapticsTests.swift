@@ -146,6 +146,51 @@ struct HapticsTests {
         #expect(await engine.isRunning)
     }
 
+    // MARK: - Ciclo de vida del audio
+    //
+    // El crash de la build 7 (TestFlight, iOS 27): al volver de background,
+    // `setChannels` llamaba a `stopContinuous()` y este rearmaba el player con
+    // `play()`, que lanza NSException si el motor está parado. Estos tests fijan el
+    // contrato: **parar nunca arranca nada**.
+
+    @Test("Parar el continuo con el audio muerto es un no-op, no un play() a ciegas")
+    func stoppingIdleAudioNeverStarts() async {
+        let audio = AudioCueEngine()
+
+        await audio.stopContinuous()
+        await audio.updateAlignment(intensity: nil)
+        await audio.stopContinuous()
+
+        #expect(await audio.isActive == false)
+    }
+
+    @Test("Suspender deja el audio explícitamente muerto, pase lo que pase al arrancar")
+    func suspendLeavesAudioDead() async {
+        let audio = AudioCueEngine()
+        // En simulador el arranque puede salir bien o mal: el contrato es el mismo.
+        await audio.start(substituting: true)
+
+        await audio.suspend()
+        #expect(await audio.isActive == false)
+
+        await audio.stopContinuous()
+        #expect(await audio.isActive == false, "una parada no puede resucitar el audio")
+    }
+
+    /// La secuencia exacta del crash: background → los interruptores de Ajustes se
+    /// empujan (`initial: true` al recomponer la vista) → vuelta a primer plano.
+    @Test("Apagar canales con la app suspendida no rompe la vuelta a primer plano")
+    func channelSwitchWhileSuspendedSurvives() async {
+        let engine = CoreHapticsEngine(hardwareStartOverride: { true })
+        await engine.prepare()
+
+        await engine.suspend()
+        await engine.setChannels(haptics: false, audio: false)
+
+        await engine.ensureRunning()
+        #expect(await engine.isRunning)
+    }
+
     @Test("Sin Taptic Engine hay que sustituir, no solo reforzar")
     func substitutionKicksInWithoutHardware() {
         let withHardware = HapticsCapabilities(supportsHaptics: true, lowPowerMode: false)
