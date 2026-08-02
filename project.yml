@@ -27,6 +27,13 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+    # Game Center va aquí y no como capability de Xcode: el .xcodeproj se
+    # regenera en cada build de CI y perdía el entitlement (la revisión rechaza
+    # la build si la versión tiene leaderboard y la build no trae la clave).
+    entitlements:
+      path: Sources/Resources/LumiSwing.entitlements
+      properties:
+        com.apple.developer.game-center: true
     # Info.plist declarado en vez de autogenerado: `GENERATE_INFOPLIST_FILE` solo
     # admite claves sueltas por build setting, y la pantalla de arranque es un
     # diccionario.
