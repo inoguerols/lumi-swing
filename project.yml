@@ -52,9 +52,11 @@ targets:
         CADisableMinimumFrameDurationOnPhone: true
         # Mismo verde y misma luciérnaga que el menú, para que el paso de la
         # pantalla de arranque al juego no tenga costura.
+        # Solo color, sin logo: la tarjeta del logo pintaba un recuadro oscuro
+        # sobre el verde y el arranque parecía roto. El launch debe parecer la
+        # primera pantalla de la app (HIG), y la primera pantalla es la noche.
         UILaunchScreen:
           UIColorName: LaunchBackground
-          UIImageName: LaunchLogo
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.noguerol.lumiswing
