@@ -476,8 +476,15 @@ enum Tuning {
         static let stemSwaySpeed: CGFloat = 1.1
 
         static let pollenCount: Int = 22
-        static let pollenRadius: CGFloat = 4
+        /// Radio por partícula, sorteado en este rango: discos idénticos se leían
+        /// como confeti, no como bokeh a distintas profundidades.
+        static let pollenRadiusMin: CGFloat = 2
+        static let pollenRadiusMax: CGFloat = 6.5
         static let pollenDriftDuration: CGFloat = 6
+        /// Ciclo de fundido (aparecer/desaparecer) de cada mota, con desfase por
+        /// partícula, y a qué fracción de su alpha pico baja en el valle.
+        static let pollenFadeDuration: CGFloat = 3.2
+        static let pollenFadeFloor: CGFloat = 0.15
 
         /// Hasta dónde llega la luz de la luciérnaga en las zonas a ciegas.
         static let lightHoleRadius: CGFloat = 230
@@ -518,29 +525,131 @@ enum Tuning {
         /// el radio de agarre sin un solo cartel.
         static let flowerReadyScale: CGFloat = 1.35
 
-        /// La luciérnaga: alas, ojos y antenas. Todo cabe dentro del círculo de
-        /// colisión salvo lo que se lee como vaporoso.
-        static let wingLength: CGFloat = 42
-        static let wingWidth: CGFloat = 20
-        static let wingFlapDuration: CGFloat = 0.12
-        static let eyeRadius: CGFloat = 4
-        static let antennaLength: CGFloat = 18
+        /// Lumi en tres trazos: la bola de luz (que **es** el cuerpo), los ojazos
+        /// y la cola de cometa. Ni cabeza, ni tórax, ni alas, ni antenas:
+        /// a 36 px de alto tiene que leerse «mota de luz con carita», y cada pieza de
+        /// anatomía que se añade resta legibilidad a ese tamaño.
+        ///
+        /// El radio de la bola sale de una cuenta, no del gusto: es toda la masa que
+        /// se dibuja, y se deforma dos veces —el squash del agarre (`Feel.squashScale`)
+        /// y el stretch por velocidad (`stretchAtMaxSpeed`)—, así que
+        /// 20 × 1,18 × 1,10 = 26,0 = `Player.radius` exacto. Subir cualquiera de los
+        /// tres saca masa encendida fuera del círculo que mata, que es lo único que
+        /// el GDD no permite negociar (hay un test que vigila el producto).
+        static let bodyRadius: CGFloat = 20
+        /// Sobremuestreo de la textura de la bola. Se genera **una vez**; a 1× el
+        /// degradado se escalona en pantalla Retina.
+        static let bodyTextureScale: CGFloat = 6
+        /// Hasta qué fracción del radio de la textura llega la luz sólida: el resto
+        /// se desvanece hasta alpha 0 **antes** del canto. Ese último tramo
+        /// transparente es lo que hace que el cuerpo no tenga filo — un círculo
+        /// recortado, por bonito que sea el color, siempre acaba en un canto duro.
+        static let bodyEdgeFade: CGFloat = 0.78
+        /// Ruido (± fracción por canal) horneado en la textura de la bola: 1-2%
+        /// basta para matar el banding del degradado radial sin verse como grano.
+        static let lightTextureNoise: CGFloat = 0.015
+        /// Bloom: capas aditivas concéntricas de la misma textura suave detrás de la
+        /// bola. Varias capas tenues y no una opaca, porque una sola vuelve a dejar
+        /// un borde que se lee como pegatina.
+        static let bodyGlowLayers: Int = 3
+        static let bodyGlowScale: CGFloat = 1.75
+        static let bodyGlowAlpha: CGFloat = 0.42
 
-        /// F4: silueta propia del cuerpo, alargada en vertical (cabeza arriba con
-        /// ojos/antenas, cola abajo). Mitades siempre ≤ `Player.radius` para no sacar
-        /// masa opaca fuera del círculo de colisión — el óvalo solo resta esquinas.
-        static let bodyLength: CGFloat = 50
-        static let bodyWidth: CGFloat = 32
+        /// Ojazos: enormes a propósito sobre una bola de 20 de radio. Son TODA la
+        /// cara (vía Limbo/Sein: el flequillo oscuro leía como eclipse y se quitó
+        /// — Lumi es luminosa hasta el núcleo) y toda la legibilidad a 36 px.
+        /// Sin el flequillo conservan su tamaño (subirlos devolvía la masa oscura
+        /// por otra vía) y se recentran en vertical: la mirada ocupa el centro de
+        /// la bola en vez de flotar en su mitad baja, y entre ambos queda franja
+        /// de luz — el test es que a 36 px siga leyéndose «mota de luz con carita».
+        static let eyeRadius: CGFloat = 8.1
+        static let eyeOffsetX: CGFloat = 10.2
+        static let eyeOffsetY: CGFloat = 0
+        /// El brillo blanco dentro del ojo, arriba y hacia dentro: es lo que
+        /// convierte un agujero negro en una mirada. Se hornea SIN blur (nítido):
+        /// a 26 px el brillo es lo único del ojo que sobrevive, y es lo que sigue
+        /// diciendo «mirada» y no «agujero».
+        static let eyeHighlightRadius: CGFloat = 3.45
+        static let eyeHighlightOffset: CGFloat = 3.0
 
-        /// La gota de luz en el abdomen trasero: círculo con una punta hacia abajo.
-        /// `lanternOffsetY` la centra en la mitad baja del cuerpo (la cola).
-        static let lanternRadius: CGFloat = 11
-        /// Con `lanternOffsetY` y `lanternRadius`, la punta de la gota queda a 25pt
-        /// del centro — 1pt de margen dentro del círculo de colisión (26). Subir
-        /// cualquiera de los tres sin recalcular la sacaría fuera.
-        static let lanternTailLength: CGFloat = 5
-        static let lanternHalfAngle: CGFloat = 0.75
-        static let lanternOffsetY: CGFloat = -9
+        /// Parpadeo de ojos: cada cuánto (con jitter determinista) y cuánto se
+        /// aplastan verticalmente al cerrarse. Se queda incluso con Reduce Motion.
+        static let eyeBlinkIntervalMin: CGFloat = 3
+        static let eyeBlinkIntervalMax: CGFloat = 5
+        /// Fracción de alto del ojo que queda al cerrar: 0,12 se lee cerrado sin
+        /// desaparecer del todo.
+        static let eyeBlinkSquash: CGFloat = 0.12
+        static let eyeBlinkCloseDuration: CGFloat = 0.06
+        static let eyeBlinkOpenDuration: CGFloat = 0.09
+
+        /// Squash & stretch continuo: cuánto se estira el cuerpo en la dirección en
+        /// la que va, a `Pendulum.maxSpeed`. Solo sobre el dibujo, y acotado por la
+        /// cuenta de `bodyRadius`: el círculo de colisión no se estira, así que un
+        /// valor mayor haría que la silueta mintiera sobre lo que mata.
+        static let stretchAtMaxSpeed: CGFloat = 0.10
+
+        /// Qué fracción del ángulo de la liana adopta el cuerpo mientras cuelga. A 1
+        /// se cuelga rígido como el badajo de una campana; con 0,30 se queda casi
+        /// erguido —como quien se agarra a una rama— y el balanceo solo se insinúa.
+        static let uprightBias: CGFloat = 0.30
+        /// Muelle amortiguado de la pose: rigidez (1/s²) y amortiguación (1/s). La
+        /// amortiguación va por debajo de la crítica (2·√rigidez ≈ 21) a propósito:
+        /// ese resto es el rebote que se ve al cambiar de sentido y al soltar. Más
+        /// rigidez = el giro persigue antes; más amortiguación = menos rebote.
+        static let poseStiffness: CGFloat = 110
+        static let poseDamping: CGFloat = 12
+
+        /// Chispas que suelta en vuelo libre por encima de esta fracción de la
+        /// velocidad máxima. No informan de nada que la estela no diga ya: son el
+        /// premio de ir rápido, y por eso se apagan con Reduce Motion.
+        static let sparkSpeedThreshold: CGFloat = 0.45
+        static let sparkInterval: CGFloat = 0.09
+        static let sparkLifetime: CGFloat = 0.40
+        static let sparkRadius: CGFloat = 3
+
+        /// Motas cálidas orbitando cerca. Cuelgan del jugador pero no del cuerpo:
+        /// ni rotan ni se estiran con él, porque son aire iluminado, no anatomía.
+        /// Tamaño, alpha, ángulo y órbita llevan jitter (nada de puntos uniformes
+        /// alineados) y todas derivan además en órbita lenta (`moteOrbitDuration`).
+        static let moteCount: Int = 4
+        static let moteRadius: CGFloat = 2.6
+        static let moteOrbit: CGFloat = 1.5
+        static let moteDriftDuration: CGFloat = 1.9
+        /// Una vuelta completa del corro de motas. Con Reduce Motion no gira.
+        static let moteOrbitDuration: CGFloat = 16
+
+        /// Desenfoque horneado de la cara (ojos; los brillos van nítidos), en puntos a
+        /// escala de juego. Se aplica UNA vez al generar la textura: ninguna
+        /// frontera del personaje queda con canto duro, tampoco las oscuras.
+        static let faceBlurSigma: CGFloat = 1.2
+        /// Margen de la textura de la cara para que la cola del blur no se recorte.
+        static let facePadding: CGFloat = 6
+
+        /// Qué fracción del giro de la pose adopta la cara: el cuerpo es radialmente
+        /// simétrico, y sin este ladeo parcial el giro físico era invisible.
+        static let faceLeanFactor: CGFloat = 0.4
+
+        /// Luz ambiente: el halo más ancho y tenue de todos, el que aclara la selva
+        /// alrededor de Lumi. Radio en múltiplos de `Player.radius`.
+        static let ambientRadiusScale: CGFloat = 4.6
+        static let ambientAlpha: CGFloat = 0.13
+        /// Halo puente entre el halo del cuerpo (1,8·r) y el ambiente (4,6·r):
+        /// sin él, la luz caía a saltos y el canto del bloom se veía como un aro.
+        static let midHaloRadiusScale: CGFloat = 2.9
+        static let midHaloAlpha: CGFloat = 0.09
+
+        /// Microvida del cuerpo: pulso de respiración de la bola (±5% cada ~1,2 s,
+        /// con jitter determinista de duración para que no sea un metrónomo)
+        /// y parpadeo aditivo del núcleo (nunca resta alpha al cuerpo: F4 prohíbe
+        /// que se transparente). Con Reduce Motion el pulso se reduce a la mitad y
+        /// el parpadeo del núcleo se apaga.
+        static let corePulseScale: CGFloat = 1.05
+        static let corePulseDuration: CGFloat = 1.2
+        /// Jitter (± fracción) sobre la duración de cada medio pulso: lo que lo
+        /// hace irregular en vez de píxel-idéntico entre ciclos.
+        static let corePulseJitter: CGFloat = 0.25
+        static let coreFlickerAlphaLow: CGFloat = 0.25
+        static let coreFlickerAlphaHigh: CGFloat = 0.55
 
         /// El halo detrás de todo late al ritmo del háptico de proximidad — el
         /// parpadeo ya no toca el cuerpo (F4: eso era lo que lo hacía "transparentar").
@@ -582,6 +691,10 @@ enum Tuning {
     enum Feel {
         /// Al agarrarse, el farolillo se estira en la dirección del tirón y vuelve.
         /// Es lo que convierte un cambio de estado en un golpe de masa.
+        ///
+        /// Se multiplica con el stretch por velocidad, así que este número **no es
+        /// libre**: `Scenery.bodyRadius` × este × (1 + `Scenery.stretchAtMaxSpeed`)
+        /// tiene que caber en `Player.radius`.
         static let squashScale: CGFloat = 1.18
         static let squashDuration: CGFloat = 0.12
 
@@ -604,5 +717,33 @@ enum Tuning {
 
         /// Presupuesto del brief: del toque al nuevo run. Se mide, no se supone.
         static let restartBudget: CGFloat = 0.30
+    }
+
+    // MARK: - Unidades
+
+    enum Units {
+        /// Puntos de física por metro mostrado. Constante de presentación, no de
+        /// simulación: no calibra nada del juego, solo convierte el ritmo
+        /// sostenido (ver `Pace`), en pt/s, a un m/s legible en la pantalla de fin
+        /// de partida. A `Pendulum.maxSpeed` (1500 pt/s) equivale a 15,0 m/s.
+        static let pointsPerMeter: CGFloat = 100
+    }
+
+    // MARK: - Ritmo (métrica de "una vez más")
+
+    enum Pace {
+        /// Ventana de la media móvil que define el **ritmo sostenido**: la mejor
+        /// media de 10 s de `|velocidad|` en toda la partida. Sustituye al pico
+        /// como métrica de leaderboard — el pico satura en `Pendulum.maxSpeed` en
+        /// cualquier caída y empataría a todo el mundo; una media de 10 s solo
+        /// premia mantener el ritmo, no un instante de caída libre.
+        static let windowSeconds: CGFloat = 10
+
+        /// En cuántos cubos se trocea la ventana para promediarla sin guardar una
+        /// muestra por frame: cada cubo acumula tiempo y velocidad de forma
+        /// incremental, y se resetea solo cuando el reloj vuelve a pisarlo una
+        /// vuelta después — así el coste de memoria es fijo, pase lo que pase el
+        /// framerate.
+        static let bucketCount: Int = 20
     }
 }

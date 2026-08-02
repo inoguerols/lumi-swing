@@ -81,7 +81,8 @@ struct RootView: View {
                              isNewRecord: model.isNewRecord,
                              onRetry: startRun,
                              onMenu: showMenu,
-                             onLeaderboard: { GameCenter.show(.week) })
+                             onLeaderboard: { GameCenter.show(.week) },
+                             bestPaceMetersPerSecond: model.bestPaceMetersPerSecond)
                     .transition(.opacity)
             }
         }
@@ -142,6 +143,7 @@ struct RootView: View {
     private func startRun() {
         model.score = 0
         model.isNewRecord = false
+        model.bestPaceMetersPerSecond = 0
         model.phase = .playing
         scene.startRun()
     }

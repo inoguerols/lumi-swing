@@ -22,6 +22,16 @@ struct GameSimulation: Sendable {
     private(set) var chunks: [Chunk] = []
     private(set) var score = 0
     private(set) var isDead = false
+    /// Mejor media móvil de 10 s de `|velocidad|` alcanzada en la partida, en
+    /// puntos por segundo. Sustituye al pico (que saturaba en `Pendulum.maxSpeed`
+    /// en cualquier caída): solo premia mantener el ritmo, no un instante. Solo
+    /// crece, y se queda en 0 si la partida no llega a durar la ventana completa
+    /// (`Tuning.Pace.windowSeconds`) — se resetea al empezar una partida nueva.
+    private(set) var bestPace: CGFloat = 0
+
+    /// El mismo ritmo, convertido a metros por segundo para mostrarlo. La
+    /// conversión vive en `Tuning` y no aquí porque es puramente de presentación.
+    var bestPaceMetersPerSecond: CGFloat { bestPace / Tuning.Units.pointsPerMeter }
 
     private var seed: UInt64
     private var nextChunkIndex = 1
@@ -30,9 +40,22 @@ struct GameSimulation: Sendable {
     private var lastScoredWall = 0
     private var wasBlind = false
 
+    /// Cubos de la media móvil del ritmo: ver `recordPace`. Tamaño fijo
+    /// (`Tuning.Pace.bucketCount`), sin asignaciones por frame.
+    private var paceBucketSums: [CGFloat]
+    private var paceBucketDurations: [CGFloat]
+    /// A qué "vuelta" del reloj pertenece cada cubo. -1 marca uno que nunca se
+    /// escribió, para distinguirlo de la vuelta real 0.
+    private var paceBucketEpochs: [Int]
+    /// Tiempo total transcurrido en la partida, en segundos.
+    private var paceElapsed: CGFloat = 0
+
     init(seed: UInt64) {
         self.seed = seed
         self.body = Self.startingBody()
+        self.paceBucketSums = Array(repeating: 0, count: Tuning.Pace.bucketCount)
+        self.paceBucketDurations = Array(repeating: 0, count: Tuning.Pace.bucketCount)
+        self.paceBucketEpochs = Array(repeating: -1, count: Tuning.Pace.bucketCount)
         refillChunks()
     }
 
@@ -97,6 +120,11 @@ struct GameSimulation: Sendable {
         score = 0
         isDead = false
         wasBlind = false
+        bestPace = 0
+        paceBucketSums = Array(repeating: 0, count: Tuning.Pace.bucketCount)
+        paceBucketDurations = Array(repeating: 0, count: Tuning.Pace.bucketCount)
+        paceBucketEpochs = Array(repeating: -1, count: Tuning.Pace.bucketCount)
+        paceElapsed = 0
         refillChunks()
     }
 
@@ -114,6 +142,9 @@ struct GameSimulation: Sendable {
         wasHolding = holding
 
         body.advance(dt: dt, holding: holding)
+        // El mismo techo que aplica `PendulumBody` a sus subpasos: tras un hipo
+        // real, un dt enorme pesaría de más en la media en vez de descartarse.
+        recordPace(dt: min(dt, Tuning.Pendulum.maxFrameDelta), speed: body.velocity.length)
 
         if let obstacle = Collision.hit(position: body.position,
                                         radius: Tuning.Player.radius,
@@ -148,6 +179,46 @@ struct GameSimulation: Sendable {
             events.append(.scored(points))
         }
         return events
+    }
+
+    /// Reparte `dt` entre los cubos de la ventana de 10 s que atraviesa, acumula
+    /// tiempo y velocidad en cada uno de forma incremental, y actualiza
+    /// `bestPace` con la media resultante — solo una vez que la partida ya dura
+    /// la ventana completa (spec: partidas más cortas no puntúan ritmo).
+    ///
+    /// `dt` real es siempre mucho menor que la duración de un cubo
+    /// (`windowSeconds / bucketCount`), así que el bucle de abajo cruza como
+    /// mucho un par de fronteras por llamada, nunca miles.
+    private mutating func recordPace(dt: CGFloat, speed: CGFloat) {
+        guard dt > 0 else { return }
+        let bucketDuration = Tuning.Pace.windowSeconds / CGFloat(Tuning.Pace.bucketCount)
+
+        var t = paceElapsed
+        var remaining = dt
+        while remaining > 0 {
+            let epoch = Int(t / bucketDuration)
+            let epochEnd = CGFloat(epoch + 1) * bucketDuration
+            let slice = min(remaining, epochEnd - t)
+            let index = epoch % Tuning.Pace.bucketCount
+
+            if paceBucketEpochs[index] != epoch {
+                paceBucketSums[index] = 0
+                paceBucketDurations[index] = 0
+                paceBucketEpochs[index] = epoch
+            }
+            paceBucketSums[index] += speed * slice
+            paceBucketDurations[index] += slice
+
+            t += slice
+            remaining -= slice
+        }
+        paceElapsed += dt
+
+        guard paceElapsed >= Tuning.Pace.windowSeconds else { return }
+        let totalDuration = paceBucketDurations.reduce(0, +)
+        guard totalDuration > 0 else { return }
+        let average = paceBucketSums.reduce(0, +) / totalDuration
+        bestPace = max(bestPace, average)
     }
 
     private static func startingBody() -> PendulumBody {

@@ -204,6 +204,17 @@ struct GameOverView: View {
     let onRetry: () -> Void
     let onMenu: () -> Void
     let onLeaderboard: () -> Void
+    /// Ritmo sostenido de esta partida (mejor media de 10 s de `|velocidad|`), ya
+    /// en m/s. A 0 no se muestra: una partida que no llega a durar la ventana no
+    /// tiene ritmo que presumir.
+    let bestPaceMetersPerSecond: Double
+
+    @State private var rankingRows: [GameCenter.RankingRow] = []
+    /// Altura reservada para el mini-ranking, que llega de la red **después** de
+    /// pintar la tarjeta. Sin reserva, los botones saltaban bajo el dedo justo
+    /// cuando el jugador iba a pulsar «Otra vez». Escala con Dynamic Type porque el
+    /// contenido que reserva también escala.
+    @ScaledMetric(relativeTo: .footnote) private var rankingSlotHeight: CGFloat = 132
 
     var body: some View {
         Card {
@@ -224,7 +235,33 @@ struct GameOverView: View {
                         .foregroundStyle(.white.opacity(0.65))
                 }
 
+                if bestPaceMetersPerSecond > 0 {
+                    Label {
+                        HStack(spacing: 4) {
+                            Text("Ritmo")
+                            // `Text(verbatim:)`: el número ya viene formateado en
+                            // el idioma del jugador, y pasarlo por
+                            // LocalizedStringKey lo buscaría en el catálogo como
+                            // si fuera una clave.
+                            Text(verbatim: GameCenter.speedText(
+                                metersPerSecond: bestPaceMetersPerSecond))
+                        }
+                    } icon: {
+                        Image(systemName: "gauge.with.dots.needle.67percent")
+                    }
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                    .foregroundStyle(flowerCyan.opacity(0.85))
+                }
+
                 PrimaryButton(title: "Otra vez", action: onRetry)
+
+                // El hueco se reserva solo si hay sesión: sin ella el mini-ranking no
+                // va a llegar nunca, y un vacío permanente sería peor que el salto
+                // que evita.
+                if GameCenter.isAuthenticated {
+                    MiniRankingView(rows: rankingRows)
+                        .frame(height: rankingSlotHeight)
+                }
 
                 HStack(spacing: 28) {
                     Button(action: onLeaderboard) {
@@ -237,6 +274,61 @@ struct GameOverView: View {
                 .font(.system(.subheadline, design: .rounded, weight: .medium))
                 .foregroundStyle(flowerCyan.opacity(0.85))
             }
+        }
+        // Morir es frecuente: el modal completo de Game Center sería un castigo
+        // en cada partida (spec §4). Este mini-ranking se carga solo, sin bloquear
+        // la pantalla, y si no hay sesión/red se queda vacío en silencio — la
+        // pantalla de fin de siempre, sin más.
+        .task {
+            rankingRows = await GameCenter.loadRankingAroundLocalPlayer(
+                leaderboardID: GameCenter.leaderboardID)
+        }
+    }
+}
+
+/// El líder y tus vecinos. Vive aquí y no en `GameCenter` porque es puro layout: la
+/// vista pequeña que se pinta sola bajo el botón de "Otra vez".
+private struct MiniRankingView: View {
+    let rows: [GameCenter.RankingRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Clasificación")
+                .font(.system(.caption, design: .rounded, weight: .bold))
+                .foregroundStyle(.white.opacity(0.5))
+                .textCase(.uppercase)
+
+            ForEach(rows) { row in
+                HStack(spacing: 10) {
+                    Text("#\(row.rank)")
+                        .frame(width: 32, alignment: .leading)
+                        .foregroundStyle(row.isLocalPlayer ? fireflyAmber : .white.opacity(0.55))
+
+                    Text(row.displayName)
+                        .lineLimit(1)
+
+                    if row.isLocalPlayer {
+                        Text("Tú")
+                            .font(.system(.caption2, design: .rounded, weight: .bold))
+                            .foregroundStyle(fireflyAmber)
+                    }
+
+                    Spacer()
+
+                    Text(verbatim: row.value)
+                }
+                .font(.system(.footnote, design: .rounded, weight: row.isLocalPlayer ? .bold : .regular))
+                .foregroundStyle(row.isLocalPlayer ? .white : .white.opacity(0.75))
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        // La caja ocupa todo el hueco reservado por `GameOverView`, así que ni ella
+        // ni los botones de debajo se mueven cuando llegan las filas de la red.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.black.opacity(0.18))
         }
     }
 }
