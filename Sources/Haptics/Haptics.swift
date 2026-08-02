@@ -38,6 +38,10 @@ protocol HapticsEngine: Sendable {
     /// callando (decisión D-005).
     func updateAlignment(clearance: CGFloat?) async
 
+    /// Volumen del ambiente de selva: 1 = suena entero, 0 = silencio total, que
+    /// es lo que pide una zona a ciegas.
+    func setAmbience(gain: CGFloat) async
+
     /// Al salir de una zona a ciegas, al morir y al irse a background.
     func stopContinuous() async
 }
@@ -98,6 +102,7 @@ actor MockHapticsEngine: HapticsEngine {
     private(set) var played: [HapticSignal] = []
     private(set) var proximity: [CGFloat?] = []
     private(set) var alignment: [CGFloat?] = []
+    private(set) var ambience: [CGFloat] = []
     private(set) var stops = 0
     private(set) var prepared = false
 
@@ -109,5 +114,6 @@ actor MockHapticsEngine: HapticsEngine {
     func play(_ signal: HapticSignal) { played.append(signal) }
     func updateProximity(distance: CGFloat?) { proximity.append(distance) }
     func updateAlignment(clearance: CGFloat?) { alignment.append(clearance) }
+    func setAmbience(gain: CGFloat) { ambience.append(gain) }
     func stopContinuous() { stops += 1 }
 }

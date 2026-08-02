@@ -155,6 +155,15 @@ actor CoreHapticsEngine: HapticsEngine {
             alignmentActive = false
         }
         if !audioOn { await audio.stopContinuous() }
+        await audio.setAmbienceEnabled(audioOn)
+    }
+
+    /// El ambiente de selva, atenuado por la escena. No pasa por `audioEnabled`
+    /// aquí: el motor de audio ya guarda el interruptor por su cuenta, así que el
+    /// ducking se conserva aunque el sonido esté apagado y no hay que reconstruirlo
+    /// al volver a encenderlo.
+    func setAmbience(gain: CGFloat) async {
+        await audio.setAmbienceGain(gain)
     }
 
     private func handleReset() async {

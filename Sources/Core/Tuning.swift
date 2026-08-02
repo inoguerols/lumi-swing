@@ -444,6 +444,116 @@ enum Tuning {
         static let substituteGain: CGFloat = 1.0
     }
 
+    // MARK: - Ambiente sonoro (selva de noche, horneado por código)
+    //
+    // No hay música: hay un sitio. Una cama de selva que arropa y un motivo de
+    // kalimba que aparece de tarde en tarde. Todo se sintetiza al arrancar y se
+    // reproduce en bucle, así que aquí manda la percepción, no el tamaño del
+    // fichero.
+
+    enum Ambience {
+        /// Volumen de cada capa sobre el bus principal. Muy por debajo de los cues
+        /// (`Audio.reinforcementGain` = 0,45) a propósito: el ambiente tiene que
+        /// notarse al quitarlo, no al ponerlo.
+        static let bedGain: CGFloat = 0.11
+        static let motifGain: CGFloat = 0.15
+
+        /// A ciegas el ambiente se apaga entero. La bajada es rápida —el silencio
+        /// es parte de la señal de que entras en la zona— y la vuelta algo más
+        /// lenta, porque salir es alivio, no sobresalto.
+        static let duckOutDuration: CGFloat = 0.35
+        static let duckInDuration: CGFloat = 0.70
+        /// Escalón mínimo de volumen que merece cruzar la frontera del actor. Sin
+        /// él serían 120 mensajes por segundo durante cada fundido.
+        static let gainUpdateQuantum: CGFloat = 0.05
+
+        // MARK: Cama (grillos + aire)
+
+        /// Duración del bucle de la cama y del motivo. Son primos entre sí a
+        /// propósito: la combinación de los dos no se repite hasta pasados varios
+        /// minutos, así que el oído no encuentra el bucle.
+        static let bedLoopDuration: CGFloat = 12
+        static let motifLoopDuration: CGFloat = 25
+
+        /// Semillas fijas: el ambiente tiene que sonar igual en cada arranque y en
+        /// los tests.
+        static let bedSeed: UInt64 = 0x5EED_C21C
+        static let motifSeed: UInt64 = 0x5EED_1A11
+
+        /// Portadora y modulador del chirp de grillo. 4,5 kHz es donde canta un
+        /// grillo de verdad; la FM a 220 Hz con índice bajo es lo que le da el
+        /// raspado — un seno puro suena a pitido de horno.
+        static let cricketCarrierFrequency: CGFloat = 4500
+        static let cricketModulatorFrequency: CGFloat = 220
+        static let cricketModulationIndex: CGFloat = 2.4
+        /// Cada canto son varios pulsos cortos seguidos: el patrón de pulsos es lo
+        /// que se reconoce como grillo, más que el timbre.
+        static let cricketPulseCount: Int = 3
+        static let cricketPulseDuration: CGFloat = 0.018
+        static let cricketPulseGap: CGFloat = 0.014
+        /// Densidad: cantos por segundo repartidos por todo el bucle. Por encima de
+        /// ~3 deja de ser una noche y pasa a ser un enjambre.
+        static let cricketChirpsPerSecond: CGFloat = 1.8
+        /// Dispersión de tono y volumen entre cantos (± fracción): sin ella suenan
+        /// todos al mismo grillo clonado.
+        static let cricketPitchJitter: CGFloat = 0.10
+        static let cricketLevelJitter: CGFloat = 0.45
+        /// Mezcla relativa dentro de la cama, antes de normalizar.
+        static let cricketLevel: CGFloat = 0.55
+        static let airLevel: CGFloat = 0.9
+
+        /// Aire entre las hojas: ruido por un paso-bajo cuyo corte respira entre
+        /// estos dos valores. El barrido lento es lo que lo convierte en viento en
+        /// vez de en siseo de radio mal sintonizada.
+        static let airCutoffMin: CGFloat = 600
+        static let airCutoffMax: CGFloat = 2200
+        static let airCutoffModHz: CGFloat = 0.07
+        /// La ganancia respira en otra frecuencia que el corte, para que las dos
+        /// modulaciones no se sincronicen nunca.
+        static let airGainModHz: CGFloat = 0.11
+        static let airGainFloor: CGFloat = 0.55
+
+        // MARK: Motivo (kalimba)
+
+        /// Pentatónica menor de La. Comparte tónica con los cues (220/440/880 Hz),
+        /// así que el motivo y el idioma del juego no discuten de afinación.
+        static let pentatonicFrequencies: [CGFloat] = [440, 523.25, 587.33, 659.25, 783.99, 880]
+
+        /// Frases por bucle. Dos en 25 s = una cada 12 s largos: presencia, no
+        /// acompañamiento.
+        static let motifPhrasesPerLoop: Int = 2
+        static let motifNoteCountMin: Int = 3
+        static let motifNoteCountMax: Int = 5
+        static let motifNoteSpacingMin: CGFloat = 0.26
+        static let motifNoteSpacingMax: CGFloat = 0.50
+        /// Cuánto puede saltar la melodía de una nota a la siguiente, en grados de
+        /// la escala. Con 2 se mueve por grados contiguos y suena a frase; con la
+        /// escala entera suena a sorteo.
+        static let motifStepRange: Int = 2
+
+        /// Cuánto se hornea de cada nota y con qué constante decae. Una lengüeta de
+        /// kalimba suena casi un segundo: cortarla antes la convierte en un bloque
+        /// de madera.
+        static let pluckDuration: CGFloat = 1.6
+        static let pluckDecay: CGFloat = 0.55
+        /// El segundo parcial (una octava) es lo que da el brillo metálico del
+        /// ataque; decae mucho más rápido que el fundamental, como en el metal.
+        static let pluckPartialRatio: CGFloat = 2.0
+        static let pluckPartialLevel: CGFloat = 0.30
+        static let pluckPartialDecayFactor: CGFloat = 0.35
+        /// Rampa de ataque. A 0 el arranque de la senoide da un clic más audible
+        /// que la propia nota.
+        static let pluckAttack: CGFloat = 0.004
+        static let motifLevelJitter: CGFloat = 0.35
+
+        /// Pico al que se normaliza cada bucle antes de aplicar su ganancia: deja
+        /// margen de sobra para que la suma con los cues nunca sature.
+        static let normalizedPeak: CGFloat = 0.9
+        /// Fundido en los extremos del bucle. Es corto porque solo tiene que matar
+        /// el clic de la costura, no oírse como un respiro.
+        static let loopSeamFade: CGFloat = 0.012
+    }
+
     // MARK: - Decorado
     //
     // Nada de esto afecta a la física ni a la colisión: es el mundo alrededor del

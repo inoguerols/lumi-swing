@@ -81,6 +81,13 @@ final class GameScene: SKScene {
     private var proximityBucket: Int?
     private var alignmentBucket: Int?
 
+    /// El ambiente de selva se apaga dentro de la zona a ciegas. Se engancha a
+    /// `simulation.isBlind` —el mismo estado que dispara `blindEnter`/`blindExit`—
+    /// y no a la rampa del velo: el velo se telegrafía un muro antes a propósito,
+    /// pero el silencio tiene que caer con el muro, no anunciarlo.
+    private var ambience = AmbienceDucking()
+    private var ambienceBucket: Int?
+
     private var trailNodes: [SKSpriteNode] = []
     private var trailPositions: [CGPoint] = []
     private var trailTimer: CGFloat = 0
@@ -867,6 +874,9 @@ final class GameScene: SKScene {
             // congelado (F6): tallos, halo y cielo siguen su curso propio. Nada
             // de esto toca `simulation` ni el HUD, así que no rompe el game over.
             updateMenuAmbience(dt: CGFloat(currentTime - previous), time: currentTime)
+            // Fuera de partida la selva suena entera, aunque el run haya muerto
+            // dentro de una zona a ciegas.
+            updateAmbience(blind: false, dt: CGFloat(currentTime - previous))
         }
         guard model.phase == .playing else { return }
         guard let lastUpdateTime else { return }
@@ -925,6 +935,7 @@ final class GameScene: SKScene {
         }
 
         updateDarkness(dt: dt)
+        updateAmbience(blind: simulation.isBlind, dt: dt)
         updateSky()
         updateTrail(dt: dt)
         updatePose(dt: dt)
@@ -1044,6 +1055,7 @@ final class GameScene: SKScene {
         darknessNode.setScale(1)
         proximityBucket = nil
         alignmentBucket = nil
+        ambienceBucket = nil
         shakeRemaining = 0
         trailPositions.removeAll()
         trailTimer = 0
@@ -1174,6 +1186,19 @@ final class GameScene: SKScene {
             ? Tuning.BlindZone.reducedDarkAlpha
             : Tuning.BlindZone.darkAlpha
         darknessNode.alpha = darkness * peak
+    }
+
+    /// Traduce «estoy a ciegas» a volumen de ambiente. Escalonado como el mapa
+    /// háptico: durante un fundido son décimas de segundo a 120 fps, y el motor no
+    /// necesita enterarse de cada frame.
+    private func updateAmbience(blind: Bool, dt: CGFloat) {
+        ambience.update(blind: blind, dt: dt)
+        let bucket = Int(ambience.gain / Tuning.Ambience.gainUpdateQuantum)
+        guard bucket != ambienceBucket else { return }
+        ambienceBucket = bucket
+        let haptics = self.haptics
+        let gain = ambience.gain
+        Task { await haptics.setAmbience(gain: gain) }
     }
 
     /// Se repite en cada zona nueva mientras el jugador no lleve suficientes

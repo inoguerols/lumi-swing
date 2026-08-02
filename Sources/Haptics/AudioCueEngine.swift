@@ -20,10 +20,21 @@ actor AudioCueEngine {
     private let engine = AVAudioEngine()
     private let cuePlayer = AVAudioPlayerNode()
     private let tonePlayer = AVAudioPlayerNode()
+    private let bedPlayer = AVAudioPlayerNode()
+    private let motifPlayer = AVAudioPlayerNode()
 
     private var buffers: [HapticSignal: AVAudioPCMBuffer] = [:]
     private var proximityClick: AVAudioPCMBuffer?
     private var alignmentTone: AVAudioPCMBuffer?
+    private var ambienceBed: AVAudioPCMBuffer?
+    private var ambienceMotif: AVAudioPCMBuffer?
+
+    /// Ducking que manda el juego (1 = selva entera, 0 = zona a ciegas) y el
+    /// interruptor de Ajustes. Se guardan por separado porque cambian por vías
+    /// distintas y el volumen final es el producto de los dos.
+    private var ambienceGain: CGFloat = 1
+    private var ambienceEnabled = true
+    private var ambienceScheduled = false
 
     private var gain: CGFloat = Tuning.Audio.reinforcementGain
     private var graphReady = false
@@ -45,10 +56,13 @@ actor AudioCueEngine {
     /// rehaga el ciclo completo en vez de fiarse de un flag que puede mentir.
     func suspend() {
         toneActive = false
+        ambienceScheduled = false
         guard isActive else { return }
         isActive = false
         cuePlayer.stop()
         tonePlayer.stop()
+        bedPlayer.stop()
+        motifPlayer.stop()
         engine.stop()
     }
 
@@ -63,8 +77,11 @@ actor AudioCueEngine {
 
         isActive = false
         toneActive = false
+        ambienceScheduled = false
         cuePlayer.stop()
         tonePlayer.stop()
+        bedPlayer.stop()
+        motifPlayer.stop()
         do {
             let session = AVAudioSession.sharedInstance()
             // La categoría se repite a propósito: un reset de media services la
@@ -80,8 +97,47 @@ actor AudioCueEngine {
 
         cuePlayer.play()
         tonePlayer.play()
+        bedPlayer.play()
+        motifPlayer.play()
         isActive = true
+        scheduleAmbience()
         return true
+    }
+
+    /// Los dos bucles de ambiente, rearmados tras cada arranque del motor:
+    /// `stop()` descarta lo programado, así que volver de background sin esto
+    /// dejaría la selva muda. Va después de `isActive = true` a propósito — solo
+    /// se programa sobre players que ya han recibido su `play()` en esta misma
+    /// función, nunca antes.
+    private func scheduleAmbience() {
+        guard !ambienceScheduled,
+              let bed = ambienceBed,
+              let motif = ambienceMotif else { return }
+        bedPlayer.scheduleBuffer(bed, at: nil, options: [.loops], completionHandler: nil)
+        motifPlayer.scheduleBuffer(motif, at: nil, options: [.loops], completionHandler: nil)
+        ambienceScheduled = true
+        applyAmbienceVolume()
+    }
+
+    /// El ducking de las zonas a ciegas, que calcula la escena.
+    func setAmbienceGain(_ value: CGFloat) {
+        ambienceGain = clamp(value, 0, 1)
+        applyAmbienceVolume()
+    }
+
+    /// El interruptor de sonido de Ajustes. Mudo es volumen 0, no `stop()`:
+    /// pararlo obligaría a un `play()` para revivirlo, y ese `play()` solo puede
+    /// salir de `ensureActive()`. Un player en bucle a volumen 0 cuesta un
+    /// mezclado; el crash de la build 7 costaba la sesión.
+    func setAmbienceEnabled(_ enabled: Bool) {
+        ambienceEnabled = enabled
+        applyAmbienceVolume()
+    }
+
+    private func applyAmbienceVolume() {
+        let level = ambienceEnabled ? ambienceGain : 0
+        bedPlayer.volume = Float(level * Tuning.Ambience.bedGain)
+        motifPlayer.volume = Float(level * Tuning.Ambience.motifGain)
     }
 
     /// Deja el player en condiciones de recibir `scheduleBuffer`. El `play()` que
@@ -96,10 +152,10 @@ actor AudioCueEngine {
         if graphReady { return true }
         guard let format = AVAudioFormat(standardFormatWithSampleRate: Self.sampleRate,
                                          channels: 1) else { return false }
-        engine.attach(cuePlayer)
-        engine.attach(tonePlayer)
-        engine.connect(cuePlayer, to: engine.mainMixerNode, format: format)
-        engine.connect(tonePlayer, to: engine.mainMixerNode, format: format)
+        for player in [cuePlayer, tonePlayer, bedPlayer, motifPlayer] {
+            engine.attach(player)
+            engine.connect(player, to: engine.mainMixerNode, format: format)
+        }
         buildBuffers(format: format)
         graphReady = true
         return true
@@ -166,6 +222,12 @@ actor AudioCueEngine {
         buffers[.blindExit] = tone(format: format,
                                    frequency: Tuning.Audio.scoreBlipFrequency,
                                    duration: 0.14)
+        // Los dos bucles de selva se hornean aquí, una sola vez y fuera del hilo
+        // principal (esto corre dentro del actor): son ~37 s de audio que no se
+        // vuelven a calcular en toda la sesión.
+        ambienceBed = AmbienceSynth.bed(format: format)
+        ambienceMotif = AmbienceSynth.motif(format: format)
+
         buffers[.death] = sweep(format: format,
                                 from: Tuning.Audio.scoreBlipFrequency,
                                 to: Tuning.Audio.releaseThudFrequency * 0.5,
