@@ -1,0 +1,71 @@
+# Subida automática a App Store Connect en cada push a main.
+#
+# Firma: cloud signing con la clave API de ASC (-allowProvisioningUpdates);
+# el runner no necesita certificados ni perfiles. Subida: el propio xcodebuild
+# (ci/ExportOptions.plist con destination=upload).
+#
+# Secrets del repo: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (contenido del .p8).
+# Número de build = run_number + 10 (la build 1 se subió a mano desde Xcode).
+name: TestFlight
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'capturas/**'
+      - 'web/**'
+  workflow_dispatch:
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  subir:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generar proyecto (XcodeGen)
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Instalar clave API de App Store Connect
+        run: |
+          mkdir -p ~/private_keys
+          printf '%s' "${{ secrets.ASC_KEY_P8 }}" > ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      - name: Tests unitarios (puerta previa)
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].name')
+          echo "Simulador: ${DEVICE}"
+          xcodebuild test -project LumiSwing.xcodeproj -scheme LumiSwing \
+            -only-testing:LumiSwingTests \
+            -destination "platform=iOS Simulator,name=${DEVICE}"
+
+      - name: Archive firmado en la nube
+        run: |
+          xcodebuild archive -project LumiSwing.xcodeproj -scheme LumiSwing \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath build/LumiSwing.xcarchive \
+            CURRENT_PROJECT_VERSION=$(( GITHUB_RUN_NUMBER + 10 )) \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "${ASC_KEY_ID}" \
+            -authenticationKeyIssuerID "${ASC_ISSUER_ID}"
+
+      - name: Subir a App Store Connect
+        run: |
+          xcodebuild -exportArchive -archivePath build/LumiSwing.xcarchive \
+            -exportOptionsPlist ci/ExportOptions.plist -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "${ASC_KEY_ID}" \
+            -authenticationKeyIssuerID "${ASC_ISSUER_ID}"
