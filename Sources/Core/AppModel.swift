@@ -6,10 +6,12 @@ import Observation
 @MainActor
 final class AppModel {
     enum Phase {
-        case menu, playing, dead
+        case intro, menu, playing, dead
     }
 
-    var phase: Phase = .menu
+    /// Arranca en `.intro` (el plano de apertura); el shell lo baja a `.menu` en
+    /// cuanto la cámara termina — o directamente si Reduce Motion o `-skip-intro`.
+    var phase: Phase = .intro
     var score = 0
     var best = 0
     var isNewRecord = false

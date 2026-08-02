@@ -590,6 +590,52 @@ final class GameScene: SKScene {
         scoreLabel.alpha = 0
     }
 
+    // MARK: - Intro
+
+    private var introCompletion: (() -> Void)?
+
+    /// El plano de apertura. iOS no permite launch screens animadas (son una
+    /// imagen estática del sistema), así que el movimiento empieza aquí: la
+    /// cámara nace pegada a la luciérnaga en la oscuridad y se retira en un
+    /// único plano hasta el encuadre del menú, con el ambiente ya vivo detrás.
+    /// Un toque lo salta (`skipIntro`).
+    func playIntro(completion: @escaping () -> Void) {
+        introCompletion = completion
+        let body = simulation.body.position
+        cameraNode.position = CGPoint(x: body.x, y: body.y + Tuning.Player.radius * 2)
+        cameraNode.setScale(0.42)
+        let pull = SKAction.group([
+            SKAction.scale(to: 1, duration: 1.6),
+            SKAction.move(to: cameraBase, duration: 1.6)
+        ])
+        pull.timingMode = .easeInEaseOut
+        cameraNode.run(.sequence([
+            .wait(forDuration: 0.4),
+            pull,
+            .run { [weak self] in self?.finishIntro() }
+        ]))
+    }
+
+    func skipIntro() {
+        guard introCompletion != nil else { return }
+        finishIntro()
+    }
+
+    /// Tras una interrupción (banner de notificación, llamada) el display link
+    /// puede quedarse renegociado a 60 Hz. Re-pedir 120 al volver es gratis.
+    func refreshFrameRate() {
+        view?.preferredFramesPerSecond = 120
+    }
+
+    private func finishIntro() {
+        cameraNode.removeAllActions()
+        cameraNode.position = cameraBase
+        cameraNode.setScale(1)
+        let completion = introCompletion
+        introCompletion = nil
+        completion?()
+    }
+
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { holding = false }
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { holding = false }
 
@@ -1284,9 +1330,12 @@ final class GameScene: SKScene {
         var floorRng = SplitMix64(seed: 0x6F_00_D0)
         var ceilingRng = SplitMix64(seed: 0xCE_11_60)
 
-        let floorRect = CGRect(x: 0,
+        // Desde x negativa: la cámara del menú enseña ~50 u antes del origen y
+        // las losas cortadas en x=0 dejaban un canto feo a la izquierda.
+        let leadIn: CGFloat = 600
+        let floorRect = CGRect(x: -leadIn,
                                y: Tuning.World.floorY - Tuning.World.boundsThickness,
-                               width: Tuning.World.worldLength,
+                               width: Tuning.World.worldLength + leadIn,
                                height: Tuning.World.boundsThickness)
         let floorEdge = carvedGroundEdge(y: Tuning.World.floorY,
                                          from: floorRect.minX, to: floorRect.maxX,
@@ -1298,9 +1347,9 @@ final class GameScene: SKScene {
         floorPath.closeSubpath()
         addBoundsSlab(path: floorPath, color: Palette.groundSlab)
 
-        let ceilingRect = CGRect(x: 0,
+        let ceilingRect = CGRect(x: -leadIn,
                                  y: Tuning.World.ceilingY,
-                                 width: Tuning.World.worldLength,
+                                 width: Tuning.World.worldLength + leadIn,
                                  height: Tuning.World.boundsThickness)
         let ceilingEdge = carvedGroundEdge(y: Tuning.World.ceilingY,
                                            from: ceilingRect.minX, to: ceilingRect.maxX,

@@ -57,6 +57,13 @@ struct RootView: View {
             }
 
             switch model.phase {
+            case .intro:
+                // El plano de apertura corre en la escena; un toque lo salta.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture { scene.skipIntro() }
+
             case .menu:
                 MenuView(settings: settings,
                          onPlay: startRun,
@@ -87,6 +94,10 @@ struct RootView: View {
             let engine = self.engine
             if phase == .active {
                 Task { await engine.ensureRunning() }
+                // Hipótesis del "framerate reducido tras una notificación": el
+                // display link renegocia a 60 Hz con la interrupción y nadie
+                // vuelve a pedir 120. Re-pedirlo es gratis; validar en device.
+                scene.refreshFrameRate()
             } else {
                 // Un continuous vibrando en background es un bug reportable.
                 Task { await engine.stopContinuous() }
@@ -108,6 +119,10 @@ struct RootView: View {
             // directo a jugar, sin atravesar el menú a mano.
             if ProcessInfo.processInfo.arguments.contains("-autoplay") {
                 startRun()
+            } else if reduceMotion || ProcessInfo.processInfo.arguments.contains("-skip-intro") {
+                model.phase = .menu
+            } else {
+                scene.playIntro { model.phase = .menu }
             }
         }
     }

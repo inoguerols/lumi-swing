@@ -12,6 +12,8 @@ final class PlayFlowUITests: XCTestCase {
 
     func testJugarMorirYVolverAEmpezar() {
         let app = XCUIApplication()
+        // Directo al menú: el intro animado retrasaría cada test 2 s.
+        app.launchArguments = ["-skip-intro"]
         app.launch()
 
         let jugar = app.buttons["Jugar"]
@@ -34,6 +36,8 @@ final class PlayFlowUITests: XCTestCase {
 
     func testMantenerPulsadoLlegaALaEscena() {
         let app = XCUIApplication()
+        // Directo al menú: el intro animado retrasaría cada test 2 s.
+        app.launchArguments = ["-skip-intro"]
         app.launch()
 
         let jugar = app.buttons["Jugar"]
@@ -52,6 +56,8 @@ final class PlayFlowUITests: XCTestCase {
 
     func testLosAjustesSeAbrenYSeCierran() {
         let app = XCUIApplication()
+        // Directo al menú: el intro animado retrasaría cada test 2 s.
+        app.launchArguments = ["-skip-intro"]
         app.launch()
 
         XCTAssertTrue(app.buttons["Ajustes"].waitForExistence(timeout: 10))
