@@ -87,6 +87,26 @@ struct BlindZoneTests {
         #expect(simulation.blindZoneTelegraph == 1)
     }
 
+    @Test("El eco se apaga zona a zona: máximo en la primera, cero al acabar la enseñanza")
+    func echoFadesAcrossTeachingZones() {
+        #expect(BlindZones.ghostAlpha(zonesExperienced: 0) == Tuning.BlindTeaching.initialAlpha)
+
+        // Estrictamente decreciente mientras dura la enseñanza: si dos zonas
+        // seguidas se vieran igual, el jugador no notaría que se le está retirando.
+        for lived in 1..<Tuning.BlindTeaching.teachingZones {
+            #expect(BlindZones.ghostAlpha(zonesExperienced: lived)
+                    < BlindZones.ghostAlpha(zonesExperienced: lived - 1))
+            #expect(BlindZones.ghostAlpha(zonesExperienced: lived) > 0)
+        }
+    }
+
+    @Test("Pasada la enseñanza, a ciegas de verdad para siempre")
+    func echoIsGoneAfterTeachingZones() {
+        for lived in Tuning.BlindTeaching.teachingZones...(Tuning.BlindTeaching.teachingZones + 50) {
+            #expect(BlindZones.ghostAlpha(zonesExperienced: lived) == 0)
+        }
+    }
+
     @Test("A ciegas, el hueco es más generoso de lo que sería a la vista")
     func blindGapIsMoreForgiving() {
         let blind = WorldGenerator.chunk(index: 11, seed: 5)

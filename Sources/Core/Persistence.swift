@@ -16,6 +16,7 @@ final class GameSettings {
         static let visibleBlindZones = "pendulo.visibleBlindZones"
         static let reduceFlashing = "pendulo.reduceFlashing"
         static let blindWallsCrossed = "pendulo.blindWallsCrossed"
+        static let blindZonesEntered = "pendulo.blindZonesEntered"
     }
 
     private let defaults: UserDefaults
@@ -50,6 +51,15 @@ final class GameSettings {
         didSet { defaults.set(blindWallsCrossed, forKey: Key.blindWallsCrossed) }
     }
 
+    /// Zonas a ciegas en las que el jugador ha entrado en toda la vida de la
+    /// instalación. Gobierna el eco de aprendizaje (`BlindZones.ghostAlpha`), y
+    /// se cuenta por zonas y no por muros porque lo que se aprende es el paso
+    /// completo, no cada tronco. Clave nueva a propósito: nadie ha tenido la
+    /// enseñanza todavía, así que todo el mundo empieza en 0.
+    var blindZonesEntered: Int {
+        didSet { defaults.set(blindZonesEntered, forKey: Key.blindZonesEntered) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.best = defaults.integer(forKey: Key.best)
@@ -62,6 +72,7 @@ final class GameSettings {
         self.visibleBlindZones = defaults.bool(forKey: Key.visibleBlindZones)
         self.reduceFlashing = defaults.bool(forKey: Key.reduceFlashing)
         self.blindWallsCrossed = defaults.integer(forKey: Key.blindWallsCrossed)
+        self.blindZonesEntered = defaults.integer(forKey: Key.blindZonesEntered)
     }
 
     /// Devuelve `true` si el resultado es un récord nuevo.

@@ -88,6 +88,12 @@ enum Palette {
     /// más fuerza frente al tronco, ahora más oscuro.
     static let moss = SKColor(red: 0.50, green: 0.72, blue: 0.52, alpha: 1)
 
+    /// El eco de un muro invisible mientras el juego enseña la mecánica a ciegas.
+    /// Frío y desaturado a propósito: el tronco de verdad es casi negro y cálido
+    /// de textura, así que esto no se puede confundir con "el muro se ve" — se
+    /// lee como un reflejo del muro, que es exactamente lo que es.
+    static let blindEcho = SKColor(red: 0.38, green: 0.66, blue: 0.74, alpha: 1)
+
     /// Losas de suelo y techo (F6). Antes un único `ground` casi negro que,
     /// enteras y sin talla, se leían como bandas de letterbox. Con el borde
     /// tallado (`carvedGroundEdge`) y un matiz de sustrato en vez de negro
