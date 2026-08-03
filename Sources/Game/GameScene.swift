@@ -860,12 +860,16 @@ final class GameScene: SKScene {
                                          Tuning.Scenery.haloBrightScale,
                                          haloPulse))
             } else {
-                // Las capas anchas (ambiente y puente) van QUIETAS: su parpadeo
-                // se leía como ruido por toda la pantalla y competía con las
-                // luces que informan. La vida del aura queda en el halo pequeño,
-                // que además late con el háptico. (Feedback de Nacho 2026-08-03:
-                // «el aura resta más que suma».)
-                layer.node.alpha = layer.baseAlpha
+                // Las capas anchas respiran JUNTAS y despacio: una única
+                // envolvente en fase, solo alpha, ±4 % — bastante para no ser
+                // una pegatina, poco para que la periferia lo registre como
+                // evento. El temblor de llama y las caídas de vela (tres
+                // osciladores independientes por capa) eran el ruido que
+                // competía con las luces que informan; la vida visible va en
+                // las motas, el núcleo y el halo háptico.
+                let breath = 1 + Tuning.Scenery.auraSharedBreathAmplitude * amplitude
+                    * sin(auraTime * 2 * .pi / Tuning.Scenery.auraBreathPeriod)
+                layer.node.alpha = layer.baseAlpha * breath
             }
         }
         lightGroup.position = Effects.auraDrift(time: auraTime, amplitudeScale: amplitude)

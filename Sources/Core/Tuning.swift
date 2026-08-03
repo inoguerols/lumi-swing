@@ -841,6 +841,12 @@ enum Tuning {
 
         /// Periodo de la respiración lenta del aura, en segundos.
         static let auraBreathPeriod: CGFloat = 3.4
+        /// Respiración única y compartida de las capas anchas (ambiente y
+        /// puente): misma fase, solo alpha, amplitud bajo el umbral de evento
+        /// de la visión periférica. La mancha grande es iluminación, no fuego:
+        /// la vida visible va en motas, núcleo y halo háptico (ver D-021 y el
+        /// análisis del 2026-08-03).
+        static let auraSharedBreathAmplitude: CGFloat = 0.04
         /// Amplitud (± fracción de alpha) de la respiración: la parte más visible.
         static let auraBreathAmplitude: CGFloat = 0.10
         /// Periodo del temblor rápido, tipo llama que vibra.
