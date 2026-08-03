@@ -1,6 +1,17 @@
 {
   "sourceLanguage": "es",
   "strings": {
+    "%lld días seguidos": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld-day streak"
+          }
+        }
+      }
+    },
     "Accesibilidad": {
       "extractionState": "manual",
       "localizations": {
@@ -123,6 +134,28 @@
         }
       }
     },
+    "Muros a ciegas: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blind walls: %lld"
+          }
+        }
+      }
+    },
+    "Muros cruzados: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Walls crossed: %lld"
+          }
+        }
+      }
+    },
     "Otra vez": {
       "extractionState": "manual",
       "localizations": {
@@ -130,6 +163,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Again"
+          }
+        }
+      }
+    },
+    "Partidas: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs: %lld"
+          }
+        }
+      }
+    },
+    "Racha: %lld días": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Streak: %lld days"
           }
         }
       }

@@ -178,6 +178,14 @@ struct MenuView: View {
                         .foregroundStyle(fireflyAmber)
                 }
 
+                // La racha solo existe cuando ya lo es (≥2 días): un «1 día
+                // seguido» no presume de nada y mancha el menú.
+                if settings.streakDays >= 2 {
+                    Label("\(settings.streakDays) días seguidos", systemImage: "flame.fill")
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(fireflyAmber.opacity(0.85))
+                }
+
                 PrimaryButton(title: "Jugar", action: onPlay)
 
                 HStack(spacing: 28) {
@@ -395,6 +403,16 @@ struct SettingsView: View {
                 Section {
                     Text("Récord: \(settings.best)")
                         .font(.system(.body, design: .rounded))
+                    Text("Partidas: \(settings.totalRuns)")
+                        .font(.system(.body, design: .rounded))
+                    Text("Muros cruzados: \(settings.totalWallsCrossed)")
+                        .font(.system(.body, design: .rounded))
+                    Text("Muros a ciegas: \(settings.blindWallsCrossed)")
+                        .font(.system(.body, design: .rounded))
+                    if settings.streakDays >= 2 {
+                        Text("Racha: \(settings.streakDays) días")
+                            .font(.system(.body, design: .rounded))
+                    }
                 }
             }
             .navigationTitle("Ajustes")

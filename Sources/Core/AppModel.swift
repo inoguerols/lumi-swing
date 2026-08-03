@@ -33,6 +33,7 @@ final class AppModel {
         isNewRecord = settings.record(score: score)
         best = settings.best
         settings.record(paceMetersPerSecond: pace)
+        settings.registerRun(score: score, dayOrdinal: DailyWorld.dayOrdinal())
         GameCenter.submit(score: score, paceMetersPerSecond: pace)
         phase = .dead
     }
