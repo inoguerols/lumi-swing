@@ -236,17 +236,22 @@ final class GameScene: SKScene {
         // borde superior y quedan lejos del área jugable.
         let vineTile = Tuning.World.sceneWidth * 1.5
         let vineHeight = Tuning.Scenery.canopyNearHeight * 1.5
-        for (index, seed) in [UInt64(0x71E_A), 0x71E_B, 0x71E_C].enumerated() {
-            let texture = TextureFactory.vines(width: vineTile,
+        // UNA textura para las tres losetas, como el dosel: con semillas
+        // distintas el strip no es periódico y en cada envolvente del módulo
+        // las lianas visibles cambiaban de golpe (la liana que iba saliendo
+        // por la izquierda se esfumaba). La repetición cada loseta y media de
+        // pantalla no se lee; el pop sí.
+        let vineTexture = TextureFactory.vines(width: vineTile,
                                                height: vineHeight,
-                                               seed: seed,
+                                               seed: 0x71E_A,
                                                count: Tuning.Scenery.vinesPerTile)
-            let node = SKSpriteNode(texture: texture,
+        for index in -1...1 {
+            let node = SKSpriteNode(texture: vineTexture,
                                     size: CGSize(width: vineTile, height: vineHeight))
             node.color = Palette.vineSilhouette
             node.colorBlendFactor = 1
             node.anchorPoint = CGPoint(x: 0.5, y: 1)
-            node.position = CGPoint(x: CGFloat(index - 1) * vineTile, y: height / 2)
+            node.position = CGPoint(x: CGFloat(index) * vineTile, y: height / 2)
             node.zPosition = -75
             vineNode.addChild(node)
         }
@@ -362,8 +367,10 @@ final class GameScene: SKScene {
         // muro 5, el lejano hacia el 13) y el fondo quedaba pelado — era esto,
         // y no falta de decoración, lo que hacía el juego "vacío" al avanzar.
         let tile = Tuning.World.sceneWidth * 1.5
+        // Módulo centrado (Tuning.Scenery.parallaxOffset): el simple dejaba el
+        // strip corto por la derecha en iPad (D-023) y el fondo parpadeaba.
         func wrapped(_ factor: CGFloat) -> CGFloat {
-            -(camera.x * factor).truncatingRemainder(dividingBy: tile)
+            Tuning.Scenery.parallaxOffset(cameraX: camera.x, factor: factor, tile: tile)
         }
         canopyFarNode.position = CGPoint(
             x: wrapped(Tuning.Scenery.parallaxFar),

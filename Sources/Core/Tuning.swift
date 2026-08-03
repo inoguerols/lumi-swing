@@ -650,6 +650,20 @@ enum Tuning {
         /// Lianas del plano medio: entre el dosel cercano (0,45) y el plano de
         /// juego (1,0). El desfase de movimiento es lo que separa las capas.
         static let parallaxVines: CGFloat = 0.58
+
+        /// Desplazamiento de una capa de parallax en módulo CENTRADO del ancho
+        /// de loseta: el resultado queda en [-tile/2, tile/2], así que las tres
+        /// losetas de un strip cubren siempre ±1,5·tile alrededor de la cámara.
+        /// El módulo simple (rango (-tile, 0]) dejaba el borde derecho del
+        /// strip a solo +tile/2 en el peor caso: en iPhone (±450 visibles)
+        /// sobraba, pero el iPad ve ±731 (D-023) y el fondo asomaba desnudo en
+        /// una franja parpadeante junto al borde (bug reportado en la 1.2).
+        static func parallaxOffset(cameraX: CGFloat, factor: CGFloat,
+                                   tile: CGFloat) -> CGFloat {
+            let m = (cameraX * factor).truncatingRemainder(dividingBy: tile)
+            let centered = m > tile / 2 ? m - tile : (m < -tile / 2 ? m + tile : m)
+            return -centered
+        }
         /// Lianas por loseta de parallax (~1,5 pantallas de ancho).
         static let vinesPerTile: Int = 5
 
