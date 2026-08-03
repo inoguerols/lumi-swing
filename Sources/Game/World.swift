@@ -60,6 +60,13 @@ enum DifficultyCurve {
 /// a ciegas debe caer en el mismo muro para todo el mundo, porque es el momento
 /// en el que el juego enseña su mecánica firma.
 enum BlindZones {
+    /// El muro de anticipo: velo parcial y hápticos a plena spec, pero NO es
+    /// zona a ciegas — ni ×2, ni bonus de hueco, ni evento de entrada. Fijo e
+    /// independiente de la semilla, como el muro 11.
+    static func isPreview(wall: Int) -> Bool {
+        wall == Tuning.BlindZone.previewWall
+    }
+
     static func isBlind(wall: Int) -> Bool {
         guard wall >= Tuning.BlindZone.firstWall else { return false }
         let zone = (wall - Tuning.BlindZone.firstWall) / Tuning.BlindZone.period
