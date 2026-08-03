@@ -21,6 +21,7 @@ final class GameSettings {
         static let totalWallsCrossed = "pendulo.totalWallsCrossed"
         static let streakDays = "pendulo.streakDays"
         static let lastPlayedDay = "pendulo.lastPlayedDay"
+        static let hapticNoticeRuns = "pendulo.hapticNoticeRuns"
     }
 
     private let defaults: UserDefaults
@@ -84,6 +85,11 @@ final class GameSettings {
         didSet { defaults.set(lastPlayedDay, forKey: Key.lastPlayedDay) }
     }
 
+    /// Cuántas veces se ha enseñado ya el aviso de hápticos del menú.
+    var hapticNoticeRuns: Int {
+        didSet { defaults.set(hapticNoticeRuns, forKey: Key.hapticNoticeRuns) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.best = defaults.integer(forKey: Key.best)
@@ -101,6 +107,7 @@ final class GameSettings {
         self.totalWallsCrossed = defaults.integer(forKey: Key.totalWallsCrossed)
         self.streakDays = defaults.integer(forKey: Key.streakDays)
         self.lastPlayedDay = defaults.integer(forKey: Key.lastPlayedDay)
+        self.hapticNoticeRuns = defaults.integer(forKey: Key.hapticNoticeRuns)
     }
 
     /// Devuelve `true` si el resultado es un récord nuevo.
@@ -142,5 +149,12 @@ final class GameSettings {
     /// ciegas, el cartel explicativo se sigue enseñando en cada zona nueva.
     var needsBlindNotice: Bool {
         blindWallsCrossed < Tuning.BlindZone.noticeThreshold
+    }
+
+    /// El aviso «Lumi habla por el tacto» del menú: sale hasta tres veces, o
+    /// hasta que el jugador vive su primera zona a ciegas — lo que llegue antes.
+    /// A quien ya la ha vivido no hay que explicarle cómo se sostiene el móvil.
+    var needsHapticNotice: Bool {
+        hapticNoticeRuns < 3 && blindZonesEntered == 0
     }
 }

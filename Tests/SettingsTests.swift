@@ -84,6 +84,18 @@ struct SettingsTests {
         #expect(!settings.needsBlindNotice)
     }
 
+    @Test("El aviso de hápticos sale hasta 3 veces o hasta la primera zona a ciegas")
+    func hapticNoticeStopsWhenLearned() {
+        let settings = GameSettings(defaults: isolatedDefaults("hapticNotice"))
+        #expect(settings.needsHapticNotice)
+        settings.hapticNoticeRuns = 3
+        #expect(!settings.needsHapticNotice)
+
+        let other = GameSettings(defaults: isolatedDefaults("hapticNoticeB"))
+        other.blindZonesEntered = 1
+        #expect(!other.needsHapticNotice)
+    }
+
     @Test("Las zonas a ciegas vividas se cuentan entre partidas, no dentro de una")
     func blindZonesEnteredPersists() {
         let defaults = isolatedDefaults("blindZones")

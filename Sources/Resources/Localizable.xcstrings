@@ -68,6 +68,28 @@
         }
       }
     },
+    "Este iPhone no vibra:\nel audio te guía — sube el volumen.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This iPhone can't vibrate:\naudio guides you — turn the volume up."
+          }
+        }
+      }
+    },
+    "Hoy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today"
+          }
+        }
+      }
+    },
     "Hápticos": {
       "extractionState": "manual",
       "localizations": {
@@ -108,6 +130,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lumi Swing"
+          }
+        }
+      }
+    },
+    "Lumi habla por el tacto:\njuega con el móvil en la mano.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lumi speaks through touch:\nplay with your phone in hand."
           }
         }
       }

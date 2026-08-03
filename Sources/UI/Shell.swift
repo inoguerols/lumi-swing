@@ -133,6 +133,9 @@ private struct PrimaryButton: View {
 
 struct MenuView: View {
     let settings: GameSettings
+    /// Con Taptic Engine el aviso pide jugar con el móvil en la mano; sin él,
+    /// subir el volumen — el canal que informa es otro.
+    var hapticsSupported = true
     let onPlay: () -> Void
     let onSettings: () -> Void
     let onLeaderboard: () -> Void
@@ -184,6 +187,19 @@ struct MenuView: View {
                     Label("\(settings.streakDays) días seguidos", systemImage: "flame.fill")
                         .font(.system(.subheadline, design: .rounded, weight: .semibold))
                         .foregroundStyle(fireflyAmber.opacity(0.85))
+                }
+
+                // El canal por el que habla el juego, dicho una vez y a tiempo:
+                // hasta 3 menús o hasta la primera zona a ciegas vivida.
+                if settings.needsHapticNotice {
+                    Text(hapticsSupported
+                         ? "Lumi habla por el tacto:\njuega con el móvil en la mano."
+                         : "Este iPhone no vibra:\nel audio te guía — sube el volumen.")
+                        .font(.system(.footnote, design: .rounded))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(flowerCyan.opacity(0.9))
+                        .padding(.horizontal, 24)
+                        .onAppear { settings.hapticNoticeRuns += 1 }
                 }
 
                 PrimaryButton(title: "Jugar", action: onPlay)
@@ -311,8 +327,12 @@ struct GameOverView: View {
         // la pantalla, y si no hay sesión/red se queda vacío en silencio — la
         // pantalla de fin de siempre, sin más.
         .task {
+            // El del DÍA, no el global: el run que acabas de morir era el mundo
+            // de hoy — este ranking es el único donde tus vecinos jugaron tus
+            // mismas puertas y se mueven entre muerte y muerte. El global sigue
+            // en el botón «Clasificación».
             rankingRows = await GameCenter.loadRankingAroundLocalPlayer(
-                leaderboardID: GameCenter.leaderboardID)
+                leaderboardID: GameCenter.dailyLeaderboardID)
         }
     }
 }
@@ -324,7 +344,9 @@ private struct MiniRankingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Clasificación")
+            // «Hoy», no «Clasificación»: un ranking que se resetea a medianoche
+            // sin decir que es de hoy parece un bug de puestos perdidos.
+            Text("Hoy")
                 .font(.system(.caption, design: .rounded, weight: .bold))
                 .foregroundStyle(.white.opacity(0.5))
                 .textCase(.uppercase)

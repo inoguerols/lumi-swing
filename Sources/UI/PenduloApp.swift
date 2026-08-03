@@ -22,6 +22,10 @@ struct RootView: View {
     @State private var scene: GameScene
     @State private var showingDebug = false
     @State private var showingSettings = false
+    /// Si el hardware tiene Taptic Engine: decide el texto del aviso del menú
+    /// («juega con el móvil en la mano» vs «el audio te guía»). Optimista hasta
+    /// que el motor responda: el aviso equivocado un frame no se llega a ver.
+    @State private var hapticsSupported = true
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -66,6 +70,7 @@ struct RootView: View {
 
             case .menu:
                 MenuView(settings: settings,
+                         hapticsSupported: hapticsSupported,
                          onPlay: startRun,
                          onSettings: { showingSettings = true },
                          onLeaderboard: { GameCenter.show(.week) },
@@ -135,6 +140,7 @@ struct RootView: View {
         .task {
             GameCenter.authenticate()
             scene.showMenuBackdrop()
+            hapticsSupported = await !engine.capabilities.needsFullSubstitution
 
             // Para capturas y depuración: `xcrun simctl launch ... -autoplay` entra
             // directo a jugar, sin atravesar el menú a mano.
