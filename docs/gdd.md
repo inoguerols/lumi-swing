@@ -19,7 +19,9 @@ Toque en el menú → run. El farolillo entra por la izquierda con velocidad ini
 
 Cada muro atravesado = 1 punto. Muerte → pantalla de game over → toque → nuevo run en menos de 300 ms.
 
-Partida objetivo: **15–60 s**. Los primeros 10 muros son un tutorial silencioso (espaciado generoso, anclas evidentes); nadie lee un tutorial en un hiper-casual.
+Partida objetivo: **15–60 s**. Los primeros 10 muros son un tutorial silencioso (espaciado generoso, anclas evidentes); nadie lee un tutorial en un hiper-casual. Una excepción deliberada: el muro 6 es el **anticipo** de la mecánica firma (D-021) — velo parcial, muro en penumbra visible y hápticos a plena spec, para que quien muere pronto pruebe el sabor de las zonas a ciegas antes del muro 11.
+
+**El mundo cambia cada día** (D-020): la semilla deriva de la fecha en UTC, todo el mundo juega el mismo trazado el mismo día y la memorización caduca a medianoche. Las zonas a ciegas y el muro de anticipo caen siempre en los mismos muros, sea cual sea la semilla.
 
 ## Muerte
 
@@ -34,7 +36,8 @@ No hay muerte por tiempo, ni por quedarse quieto: el mundo nunca mata directamen
 
 - **1 punto** por muro atravesado.
 - **×2** por muro atravesado dentro de una zona a ciegas. Es la mecánica firma; el marcador debe recompensarla, no solo tolerarla.
-- Récord local persistente + leaderboard de Game Center (S6). Sin monedas ni divisa blanda.
+- Récord local persistente + leaderboards de Game Center (S6): el global `pendulo.highscore` (el principal, botón «Clasificación»), el recurrente diario `pendulo.diario` («Mundo de hoy» — el game over enseña sus vecinos bajo la cabecera «Hoy») y el de ritmo `pendulo.ritmo`. Sin monedas ni divisa blanda.
+- Racha de días jugados (D-020): única meta-progresión. Cuenta días UTC consecutivos con al menos una partida; una línea en el menú solo cuando ya es racha (≥2 días). No exige, no castiga, no notifica.
 
 ## Curva de dificultad
 

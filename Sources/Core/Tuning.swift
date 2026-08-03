@@ -319,8 +319,8 @@ enum Tuning {
         /// Ventana de chunks materializados: el actual y tres por delante.
         static let liveChunkCount: Int = 4
 
-        /// Semilla del mundo mientras se tunea: fija, para que dos runs seguidos
-        /// sean comparables. En S6 pasa a ser aleatoria por partida.
+        /// Semilla fija de la demo y los tests (el plan de DemoPilot depende de
+        /// ella). El juego real usa la semilla diaria de `DailyWorld` (D-020).
         static let initialSeed: UInt64 = 0xC0FFEE
     }
 
