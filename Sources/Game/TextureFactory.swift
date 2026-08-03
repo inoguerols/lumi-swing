@@ -85,6 +85,48 @@ enum TextureFactory {
         }
     }
 
+    /// Una loseta de lianas colgando: trazos curvos con comba desde el borde
+    /// superior, grosor decreciente y alguna hoja puntual. En blanco, como el
+    /// dosel: el tinte lo pone el sprite. Se hornea UNA vez por loseta — cero
+    /// SKShapeNode en la escena (las lianas son decoración, no información).
+    static func vines(width: CGFloat, height: CGFloat, seed: UInt64, count: Int) -> SKTexture {
+        image(size: CGSize(width: width, height: height)) { context, _ in
+            var rng = SplitMix64(seed: seed)
+            context.setFillColor(SKColor.white.cgColor)
+            context.setStrokeColor(SKColor.white.cgColor)
+            context.setLineCap(.round)
+
+            for index in 0..<max(1, count) {
+                // Reparto con jitter: ni equidistantes (cortina) ni a saco (grumos).
+                let slot = width / CGFloat(max(1, count))
+                let x = slot * (CGFloat(index) + 0.5) + rng.nextCGFloat(in: -slot * 0.3...slot * 0.3)
+                let length = height * rng.nextCGFloat(in: 0.35...0.9)
+                let sway = rng.nextCGFloat(in: -34...34)
+
+                let path = CGMutablePath()
+                path.move(to: CGPoint(x: x, y: height))
+                path.addCurve(to: CGPoint(x: x + sway, y: height - length),
+                              control1: CGPoint(x: x + sway * 0.2, y: height - length * 0.35),
+                              control2: CGPoint(x: x + sway * 0.85, y: height - length * 0.7))
+                context.setLineWidth(rng.nextCGFloat(in: 3.5...6))
+                context.addPath(path)
+                context.strokePath()
+
+                // 2-3 hojas por liana, gotas orientadas hacia abajo.
+                for _ in 0..<Int(rng.nextCGFloat(in: 2...3.99)) {
+                    let t = rng.nextCGFloat(in: 0.3...0.95)
+                    let leafX = x + sway * t + rng.nextCGFloat(in: -3...3)
+                    let leafY = height - length * t
+                    let leafSize = rng.nextCGFloat(in: 5...9)
+                    context.fillEllipse(in: CGRect(x: leafX - leafSize / 2,
+                                                   y: leafY - leafSize,
+                                                   width: leafSize,
+                                                   height: leafSize * 1.8))
+                }
+            }
+        }
+    }
+
     // MARK: - Utilidad
 
     private static func image(size: CGSize, draw: (CGContext, CGRect) -> Void) -> SKTexture {

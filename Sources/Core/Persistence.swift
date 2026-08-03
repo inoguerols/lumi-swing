@@ -22,6 +22,8 @@ final class GameSettings {
         static let streakDays = "pendulo.streakDays"
         static let lastPlayedDay = "pendulo.lastPlayedDay"
         static let hapticNoticeRuns = "pendulo.hapticNoticeRuns"
+        static let crownsEarned = "pendulo.crownsEarned"
+        static let lastCrownedDay = "pendulo.lastCrownedDay"
     }
 
     private let defaults: UserDefaults
@@ -90,6 +92,16 @@ final class GameSettings {
         didSet { defaults.set(hapticNoticeRuns, forKey: Key.hapticNoticeRuns) }
     }
 
+    /// Coronas: días en los que se terminó nº1 del «Mundo de hoy».
+    var crownsEarned: Int {
+        didSet { defaults.set(crownsEarned, forKey: Key.crownsEarned) }
+    }
+
+    /// Último día (ordinal UTC) cuya corona ya se reclamó. 0 = ninguna.
+    var lastCrownedDay: Int {
+        didSet { defaults.set(lastCrownedDay, forKey: Key.lastCrownedDay) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.best = defaults.integer(forKey: Key.best)
@@ -108,6 +120,8 @@ final class GameSettings {
         self.streakDays = defaults.integer(forKey: Key.streakDays)
         self.lastPlayedDay = defaults.integer(forKey: Key.lastPlayedDay)
         self.hapticNoticeRuns = defaults.integer(forKey: Key.hapticNoticeRuns)
+        self.crownsEarned = defaults.integer(forKey: Key.crownsEarned)
+        self.lastCrownedDay = defaults.integer(forKey: Key.lastCrownedDay)
     }
 
     /// Devuelve `true` si el resultado es un récord nuevo.
@@ -130,6 +144,18 @@ final class GameSettings {
     /// cuenta días de calendario UTC consecutivos con al menos una partida —
     /// el mismo reloj que rota el mundo diario, para que «volví hoy» signifique
     /// lo mismo en los dos sitios.
+    /// Reclama la corona del día `day` (ordinal UTC) si no estaba reclamada.
+    /// Monótona a propósito: solo se premian días posteriores al último
+    /// coronado, así que ni una recarga ni una segunda consulta a Game Center
+    /// pueden duplicar una corona. Devuelve si se otorgó.
+    @discardableResult
+    func awardCrown(forDay day: Int) -> Bool {
+        guard day > lastCrownedDay else { return false }
+        lastCrownedDay = day
+        crownsEarned += 1
+        return true
+    }
+
     func registerRun(score: Int, dayOrdinal: Int) {
         totalRuns += 1
         totalWallsCrossed += score

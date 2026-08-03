@@ -182,11 +182,20 @@ struct MenuView: View {
                 }
 
                 // La racha solo existe cuando ya lo es (≥2 días): un «1 día
-                // seguido» no presume de nada y mancha el menú.
-                if settings.streakDays >= 2 {
-                    Label("\(settings.streakDays) días seguidos", systemImage: "flame.fill")
-                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                        .foregroundStyle(fireflyAmber.opacity(0.85))
+                // seguido» no presume de nada y mancha el menú. Las coronas
+                // (días ganados) comparten línea: son la misma familia de
+                // «volví y me fue bien», y dos líneas serían vitrina.
+                if settings.streakDays >= 2 || settings.crownsEarned > 0 {
+                    HStack(spacing: 16) {
+                        if settings.streakDays >= 2 {
+                            Label("\(settings.streakDays) días seguidos", systemImage: "flame.fill")
+                        }
+                        if settings.crownsEarned > 0 {
+                            Label("\(settings.crownsEarned)", systemImage: "crown.fill")
+                        }
+                    }
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(fireflyAmber.opacity(0.85))
                 }
 
                 // El canal por el que habla el juego, dicho una vez y a tiempo:
@@ -433,6 +442,10 @@ struct SettingsView: View {
                         .font(.system(.body, design: .rounded))
                     if settings.streakDays >= 2 {
                         Text("Racha: \(settings.streakDays) días")
+                            .font(.system(.body, design: .rounded))
+                    }
+                    if settings.crownsEarned > 0 {
+                        Text("Coronas: \(settings.crownsEarned)")
                             .font(.system(.body, design: .rounded))
                     }
                 }

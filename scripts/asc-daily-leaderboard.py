@@ -47,11 +47,44 @@ def post(path, payload):
     return r.json()
 
 
+CROWNS_ID = 'pendulo.coronas'
+
+
+def ensure_crowns(detail_id, existing):
+    """Leaderboard clásico acumulado de días ganados («Coronas»)."""
+    if any(l['attributes'].get('vendorIdentifier') == CROWNS_ID for l in existing):
+        print(f'{CROWNS_ID} ya existe — nada que hacer.')
+        return
+    board = post('/gameCenterLeaderboards', {'data': {
+        'type': 'gameCenterLeaderboards',
+        'attributes': {
+            'vendorIdentifier': CROWNS_ID,
+            'referenceName': 'Coronas',
+            'defaultFormatter': 'INTEGER',
+            'submissionType': 'BEST_SCORE',
+            'scoreSortType': 'DESC',
+            'scoreRangeStart': '0',
+            'scoreRangeEnd': '100000',
+        },
+        'relationships': {'gameCenterDetail': {
+            'data': {'type': 'gameCenterDetails', 'id': detail_id}}},
+    }})['data']
+    for locale, name in (('es-ES', 'Coronas'), ('en-US', 'Crowns')):
+        post('/gameCenterLeaderboardLocalizations', {'data': {
+            'type': 'gameCenterLeaderboardLocalizations',
+            'attributes': {'locale': locale, 'name': name},
+            'relationships': {'gameCenterLeaderboard': {
+                'data': {'type': 'gameCenterLeaderboards', 'id': board['id']}}},
+        }})
+    print(f'Creado {CROWNS_ID} ({board["id"]}) con es/en')
+
+
 def main():
     app_id = get(f'/apps?filter[bundleId]={BUNDLE}')['data'][0]['id']
     detail_id = get(f'/apps/{app_id}/gameCenterDetail')['data']['id']
 
     existing = get(f'/gameCenterDetails/{detail_id}/gameCenterLeaderboards?limit=50')['data']
+    ensure_crowns(detail_id, existing)
     if any(l['attributes'].get('vendorIdentifier') == VENDOR_ID for l in existing):
         print(f'{VENDOR_ID} ya existe — nada que hacer.')
         return

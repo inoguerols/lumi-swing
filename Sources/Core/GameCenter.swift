@@ -23,6 +23,11 @@ enum GameCenter {
     /// vecinos jugaron exactamente el mismo trazado que tú.
     static let dailyLeaderboardID = "pendulo.diario"
 
+    /// Coronas: cuántos días se terminó nº1 del «Mundo de hoy». Acumulado
+    /// clásico; la corona se reclama al abrir la app consultando la ocurrencia
+    /// **anterior** del diario (ver `claimDailyCrownIfWon`).
+    static let crownsLeaderboardID = "pendulo.coronas"
+
     /// Las tres vistas del ranking, en el idioma del juego y no en el de GameKit:
     /// así la interfaz no tiene que importar GameKit para hablar de clasificaciones.
     enum Scope: String, CaseIterable, Identifiable {
@@ -126,6 +131,33 @@ enum GameCenter {
                                                      player: GKLocalPlayer.local,
                                                      leaderboardIDs: [paceLeaderboardID])
             }
+        }
+    }
+
+    /// ¿Ganaste el mundo de ayer? Se comprueba al arrancar: la ocurrencia
+    /// anterior del leaderboard recurrente guarda el podio final del día ya
+    /// cerrado. Si el jugador local quedó nº1 y esa corona no estaba reclamada
+    /// (`GameSettings.awardCrown` es monótona por día), se suma y se publica el
+    /// total en `pendulo.coronas`. Todo fallo degrada en silencio, como el
+    /// resto de Game Center: una corona jamás bloquea el juego.
+    static func claimDailyCrownIfWon(settings: GameSettings) async {
+        guard isAuthenticated else { return }
+        guard let board = try? await GKLeaderboard.loadLeaderboards(IDs: [dailyLeaderboardID]).first,
+              let previous = try? await board.loadPreviousOccurrence(),
+              let startDate = previous.startDate,
+              let local = try? await previous.loadEntries(for: [GKLocalPlayer.local],
+                                                          timeScope: .allTime).0,
+              local.rank == 1
+        else { return }
+
+        let day = DailyWorld.dayOrdinal(on: startDate)
+        guard settings.awardCrown(forDay: day) else { return }
+        let total = settings.crownsEarned
+        Task {
+            try? await GKLeaderboard.submitScore(total,
+                                                 context: 0,
+                                                 player: GKLocalPlayer.local,
+                                                 leaderboardIDs: [crownsLeaderboardID])
         }
     }
 

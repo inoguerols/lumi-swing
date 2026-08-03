@@ -141,6 +141,13 @@ struct RootView: View {
             GameCenter.authenticate()
             scene.showMenuBackdrop()
             hapticsSupported = await !engine.capabilities.needsFullSubstitution
+            // La corona de ayer se reclama al arrancar, con un margen para que
+            // la autenticación de Game Center termine. Si aún no hay sesión, se
+            // reintentará en el próximo arranque — una corona puede esperar.
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                await GameCenter.claimDailyCrownIfWon(settings: settings)
+            }
 
             // Para capturas y depuración: `xcrun simctl launch ... -autoplay` entra
             // directo a jugar, sin atravesar el menú a mano.

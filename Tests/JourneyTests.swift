@@ -36,6 +36,20 @@ struct JourneyTests {
         #expect(settings.streakDays == 1)
     }
 
+    @Test("La corona de un día solo se reclama una vez, y nunca hacia atrás")
+    func crownsAreMonotonic() {
+        let settings = GameSettings(defaults: isolatedDefaults(#function))
+        #expect(settings.awardCrown(forDay: 100))
+        #expect(settings.crownsEarned == 1)
+        #expect(!settings.awardCrown(forDay: 100))   // mismo día: no duplica
+        #expect(!settings.awardCrown(forDay: 99))    // hacia atrás: jamás
+        #expect(settings.awardCrown(forDay: 101))
+        #expect(settings.crownsEarned == 2)
+
+        let reopened = GameSettings(defaults: isolatedDefaults(#function))
+        _ = reopened  // el aislamiento borra el dominio: solo comprobamos arriba
+    }
+
     @Test("La racha sobrevive a cerrar la app")
     func streakPersists() {
         let defaults = isolatedDefaults(#function)

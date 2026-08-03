@@ -70,6 +70,9 @@ final class GameScene: SKScene {
     private let skyNode = SKSpriteNode()
     private let canopyFarNode = SKNode()
     private let canopyNearNode = SKNode()
+    /// Lianas del plano medio: la capa que puebla el hueco entre el dosel y el
+    /// plano de juego, que quedaba desierto entre puerta y puerta.
+    private let vineNode = SKNode()
     private let pollenNode = SKNode()
     /// La luna. Ya no clavada a la cámara (F6): `updateParallax` la mueve una
     /// fracción mínima de lo que se mueve la cámara, partiendo de esta posición.
@@ -226,6 +229,29 @@ final class GameScene: SKScene {
         cameraNode.addChild(canopyFarNode)
         cameraNode.addChild(canopyNearNode)
 
+        // Lianas del plano medio (veredicto del director, 2026-08-03): pueblan
+        // el hueco entre el dosel y el plano de juego. Silueta oscura sin
+        // brillo — «lo que brilla informa» — y el desfase de parallax hace que
+        // el cerebro las separe del juego por movimiento relativo. Cuelgan del
+        // borde superior y quedan lejos del área jugable.
+        let vineTile = Tuning.World.sceneWidth * 1.5
+        let vineHeight = Tuning.Scenery.canopyNearHeight * 1.5
+        for (index, seed) in [UInt64(0x71E_A), 0x71E_B, 0x71E_C].enumerated() {
+            let texture = TextureFactory.vines(width: vineTile,
+                                               height: vineHeight,
+                                               seed: seed,
+                                               count: Tuning.Scenery.vinesPerTile)
+            let node = SKSpriteNode(texture: texture,
+                                    size: CGSize(width: vineTile, height: vineHeight))
+            node.color = Palette.vineSilhouette
+            node.colorBlendFactor = 1
+            node.anchorPoint = CGPoint(x: 0.5, y: 1)
+            node.position = CGPoint(x: CGFloat(index - 1) * vineTile, y: height / 2)
+            node.zPosition = -75
+            vineNode.addChild(node)
+        }
+        cameraNode.addChild(vineNode)
+
         buildMoon(height: height)
         buildPollen(width: width, height: height)
         cameraNode.addChild(pollenNode)
@@ -331,14 +357,29 @@ final class GameScene: SKScene {
     /// con moverlas en sentido contrario una fracción de lo que se ha movido.
     private func updateParallax() {
         let camera = cameraBase
+        // El desplazamiento va en módulo del ancho de tile: sin él, las tres
+        // losetas de cada capa se salían de pantalla (el dosel cercano hacia el
+        // muro 5, el lejano hacia el 13) y el fondo quedaba pelado — era esto,
+        // y no falta de decoración, lo que hacía el juego "vacío" al avanzar.
+        let tile = Tuning.World.sceneWidth * 1.5
+        func wrapped(_ factor: CGFloat) -> CGFloat {
+            -(camera.x * factor).truncatingRemainder(dividingBy: tile)
+        }
         canopyFarNode.position = CGPoint(
-            x: -camera.x * Tuning.Scenery.parallaxFar,
+            x: wrapped(Tuning.Scenery.parallaxFar),
             y: -camera.y * Tuning.Scenery.parallaxFar * 0.3)
         canopyNearNode.position = CGPoint(
-            x: -camera.x * Tuning.Scenery.parallaxNear,
+            x: wrapped(Tuning.Scenery.parallaxNear),
             y: -camera.y * Tuning.Scenery.parallaxNear * 0.3)
+        vineNode.position = CGPoint(
+            x: wrapped(Tuning.Scenery.parallaxVines),
+            y: -camera.y * Tuning.Scenery.parallaxVines * 0.3)
+        // La luna orbita con periodo largo en vez de irse para siempre: el
+        // envolvente del módulo cae siempre fuera de pantalla.
+        let moonCycle = Tuning.World.sceneWidth * 4
         moonNode.position = CGPoint(
-            x: moonHomePosition.x - camera.x * Tuning.Scenery.parallaxMoon,
+            x: moonHomePosition.x
+                - (camera.x * Tuning.Scenery.parallaxMoon).truncatingRemainder(dividingBy: moonCycle),
             y: moonHomePosition.y - camera.y * Tuning.Scenery.parallaxMoon * 0.3)
     }
 

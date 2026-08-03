@@ -26,6 +26,9 @@ enum Palette {
     /// Más clara que `trunk`/`bark`: es decoración, no letal, y la regla de Alto's
     /// (silueta oscura = peligro) exige que lo que mata sea lo más oscuro de la escena.
     static let canopyNear = SKColor(red: 0.12, green: 0.26, blue: 0.23, alpha: 1)
+    /// Lianas decorativas del plano medio: silueta, más oscura que el dosel
+    /// cercano contra el que recortan. NUNCA brillan — lo que brilla informa.
+    static let vineSilhouette = SKColor(red: 0.09, green: 0.20, blue: 0.18, alpha: 1)
 
     /// La luna: de dónde viene la luz. Sin ella el verde del cielo era un color
     /// plano sin causa; con ella hay una fuente, y la escena tiene dirección.

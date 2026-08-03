@@ -627,6 +627,11 @@ enum Tuning {
         /// La luna, mucho más lejos que el dosel: apenas se mueve, pero se mueve.
         /// Antes clavada a la cámara — ahora el run deja memoria visual (F6).
         static let parallaxMoon: CGFloat = 0.05
+        /// Lianas del plano medio: entre el dosel cercano (0,45) y el plano de
+        /// juego (1,0). El desfase de movimiento es lo que separa las capas.
+        static let parallaxVines: CGFloat = 0.58
+        /// Lianas por loseta de parallax (~1,5 pantallas de ancho).
+        static let vinesPerTile: Int = 5
 
         static let canopyFarHeight: CGFloat = 460
         static let canopyNearHeight: CGFloat = 320
