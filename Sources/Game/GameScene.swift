@@ -979,6 +979,11 @@ final class GameScene: SKScene {
                 emit(.grab)
             case .released:
                 emit(.release)
+            case .flowerFell(let position):
+                // La caída reutiliza el transient de Suelta: significa «estás
+                // desenganchado», y es verdad. El vocabulario háptico es cerrado.
+                animateFlowerFall(at: position)
+                emit(.release)
             case .missedGrab:
                 // Pulsar sobre el vacío no dice nada: el silencio ya informa de que
                 // no hay nada ahí. Una señal de error castigaría al jugador por
@@ -1001,6 +1006,7 @@ final class GameScene: SKScene {
         updateTrail(dt: dt)
         updatePose(dt: dt)
         updateSparks(dt: dt)
+        updateWither()
         updateBlink(dt: dt)
         updateAura(dt: dt)
         feedHapticMap()
@@ -1477,8 +1483,12 @@ final class GameScene: SKScene {
         let thickness = Tuning.World.wallThickness
 
         // Los muros van en su propio subnodo para poder desvanecerlos sin arrastrar
-        // a los faroles.
-        let walls = SKNode()
+        // a los faroles. Rasterizado: la corteza son decenas de SKShapeNode que no
+        // cambian nunca; cacheados como textura pasan de decenas de draw calls por
+        // frame a uno. El alpha de zona a ciegas se aplica a este nodo efecto, y
+        // eso no invalida la caché (solo un cambio en los hijos lo hace).
+        let walls = SKEffectNode()
+        walls.shouldRasterize = true
         walls.name = Self.wallsNodeName
 
         // Dos tramos: del suelo al borde inferior del hueco, y del superior al techo.
@@ -1520,7 +1530,8 @@ final class GameScene: SKScene {
         // cuelga de `walls` a propósito: ese nodo se apaga con la oscuridad, y el
         // eco tiene que hacer justo lo contrario.
         if chunk.isBlind, !silhouettes.isEmpty {
-            let echo = SKNode()
+            let echo = SKEffectNode()
+            echo.shouldRasterize = true
             echo.name = Self.echoNodeName
             echo.zPosition = Self.echoZPosition
             echo.alpha = 0
@@ -1569,6 +1580,15 @@ final class GameScene: SKScene {
         let node = SKNode()
         guard endX > startX else { return node }
 
+        // Maleza y dosel se rasterizan por separado: juntos, el frame acumulado
+        // iría de suelo a techo y la textura cacheada sería casi toda vacío.
+        let undergrowth = SKEffectNode()
+        undergrowth.shouldRasterize = true
+        let canopy = SKEffectNode()
+        canopy.shouldRasterize = true
+        node.addChild(undergrowth)
+        node.addChild(canopy)
+
         let step = Tuning.Scenery.undergrowthSpacing
         var x = startX
         while x < endX {
@@ -1583,7 +1603,7 @@ final class GameScene: SKScene {
             grass.fillColor = Palette.grass
             grass.strokeColor = .clear
             grass.alpha = 0.9
-            node.addChild(grass)
+            undergrowth.addChild(grass)
 
             let leafHeight = rng.nextCGFloat(in: (step * 0.4)...(step * 1.2))
             let leafPath = CGMutablePath()
@@ -1595,7 +1615,7 @@ final class GameScene: SKScene {
             leaf.fillColor = Palette.leaf
             leaf.strokeColor = .clear
             leaf.alpha = 0.9
-            node.addChild(leaf)
+            canopy.addChild(leaf)
 
             x += width
         }
@@ -1792,7 +1812,11 @@ final class GameScene: SKScene {
         stem.lineWidth = 3
         node.addChild(stem)
 
-        let corolla = SKNode()
+        // Rasterizada: pétalos y núcleo no cambian nunca salvo cuando cae un
+        // pétalo (marchitado), y entonces la caché se repinta una vez. La escala
+        // y el alpha del resaltado se aplican al nodo efecto sin invalidarla.
+        let corolla = SKEffectNode()
+        corolla.shouldRasterize = true
         corolla.name = Self.corollaNodeName
         let petalCount = Tuning.Scenery.flowerPetalCount
         let petalSize = Tuning.Scenery.flowerPetalLength
@@ -1872,6 +1896,80 @@ final class GameScene: SKScene {
         }
     }
 
+    /// El marchitado hecho visible: la flor ES el temporizador (spec: sin HUD).
+    /// Cada `Tuning.Wither.petalInterval` segundos de agarre gastados, un pétalo
+    /// menos; la caída completa la anima `animateFlowerFall` cuando llega el
+    /// evento. Los pétalos son los primeros `flowerPetalCount` hijos de la corola.
+    private func updateWither() {
+        for chunk in simulation.chunks where chunk.index >= Tuning.Wither.firstWall {
+            guard let flowers = chunkNodes[chunk.index]?
+                .childNode(withName: Self.flowersNodeName) else { continue }
+
+            for (slot, flower) in flowers.children.enumerated() {
+                guard slot < chunk.anchors.count,
+                      !simulation.flowerHasFallen(wall: chunk.index, slot: slot),
+                      let corolla = flower.childNode(withName: Self.corollaNodeName)
+                else { continue }
+
+                let progress = simulation.witherProgress(wall: chunk.index, slot: slot)
+                let petalCount = Tuning.Scenery.flowerPetalCount
+                let gone = min(petalCount, Int(progress * CGFloat(petalCount)))
+                for index in 0..<gone {
+                    let petal = corolla.children[index]
+                    guard petal.alpha > 0, !petal.hasActions() else { continue }
+                    dropPetal(petal)
+                }
+            }
+        }
+    }
+
+    /// Un pétalo se desprende y cae. Se queda con alpha 0 dentro de la corola en
+    /// vez de borrarse: los pétalos que faltan son la memoria de la flor, y el
+    /// resto del código los cuenta por posición.
+    private func dropPetal(_ petal: SKNode) {
+        guard !reduceMotion else {
+            petal.run(.fadeOut(withDuration: 0.5))
+            return
+        }
+        let drift: CGFloat = petal.position.x < 0 ? -16 : 16
+        let fall = SKAction.group([
+            .moveBy(x: drift, y: -70, duration: 0.9),
+            .fadeOut(withDuration: 0.9)
+        ])
+        fall.timingMode = .easeIn
+        petal.run(fall)
+    }
+
+    /// La flor agotada cae: la corola se desprende y se apaga, el tallo queda en
+    /// penumbra. La selva sigue su curso — sin castigo añadido, la física de
+    /// siempre resuelve lo que venga después.
+    private func animateFlowerFall(at position: CGPoint) {
+        for chunk in simulation.chunks {
+            guard let slot = chunk.anchors.firstIndex(where: { $0.position == position }),
+                  let flowers = chunkNodes[chunk.index]?
+                      .childNode(withName: Self.flowersNodeName),
+                  slot < flowers.children.count else { continue }
+
+            let flower = flowers.children[slot]
+            if let corolla = flower.childNode(withName: Self.corollaNodeName) {
+                if reduceMotion {
+                    corolla.run(.fadeOut(withDuration: 0.5))
+                } else {
+                    let drop = SKAction.group([
+                        .moveBy(x: 0, y: -150, duration: 1.0),
+                        .rotate(byAngle: 0.5, duration: 1.0),
+                        .fadeOut(withDuration: 1.0)
+                    ])
+                    drop.timingMode = .easeIn
+                    corolla.run(drop)
+                }
+            }
+            flower.childNode(withName: Self.stemNodeName)?
+                .run(.fadeAlpha(to: 0.25, duration: 0.8))
+            return
+        }
+    }
+
     private func highlightReachableFlowers() {
         let position = simulation.body.position
         for chunk in simulation.chunks {
@@ -1881,6 +1979,10 @@ final class GameScene: SKScene {
             for (index, flower) in flowers.children.enumerated() {
                 guard index < chunk.anchors.count,
                       let corolla = flower.childNode(withName: Self.corollaNodeName) else { continue }
+
+                // Una flor caída ya no invita a nada: si el resaltado siguiera
+                // tocándole el alpha, resucitaría la corola que acaba de apagarse.
+                guard !simulation.flowerHasFallen(wall: chunk.index, slot: index) else { continue }
 
                 let reachable = position.distance(to: chunk.anchors[index].position)
                     <= Tuning.Pendulum.grabRadius

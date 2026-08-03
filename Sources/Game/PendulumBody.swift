@@ -150,9 +150,13 @@ struct PendulumBody: Sendable {
         return true
     }
 
-    mutating func release() {
+    /// `boosted: false` es la suelta que no elige el jugador (una flor marchita
+    /// que cae): conserva la velocidad exacta, porque el impulso extra es el
+    /// premio de soltarse a tiempo, no un regalo del decorado.
+    mutating func release(boosted: Bool = true) {
         guard attachment != nil else { return }
         attachment = nil
+        guard boosted else { return }
         velocity = velocity * Tuning.Pendulum.releaseBoost
         clampSpeed()
     }

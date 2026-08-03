@@ -158,6 +158,25 @@ enum Tuning {
         static let maxFrameDelta: CGFloat = 1.0 / 20.0
     }
 
+    /// Flores marchitas: a partir de `firstWall`, colgarse consume la flor. El
+    /// desgaste es acumulativo por flor (los pétalos no vuelven) y al agotarse el
+    /// presupuesto la flor cae y suelta a Lumi con su velocidad exacta — sin
+    /// `releaseBoost`, que es el premio de una suelta *elegida*. Ver la entrada
+    /// correspondiente en docs/decisiones.md.
+    enum Wither {
+        /// Primer muro con flores marchitas. El tutorial (1-10) y la primera zona
+        /// a ciegas (11-13) quedan intactos: cada mecánica se estrena sola, y el
+        /// tramo con vista 14-22 enseña esta antes de que conviva con la ceguera.
+        static let firstWall: Int = 14
+        /// Segundos totales de agarre que aguanta una flor. Un ciclo de bombeo
+        /// deliberado (2-3 s) cabe entero con margen; el que acampa recibe cuatro
+        /// pétalos de aviso antes de la consecuencia.
+        static let grabBudget: CGFloat = 4.0
+        /// Cada cuánto cae un pétalo: la flor de `Scenery.flowerPetalCount`
+        /// pétalos ES el temporizador, sin HUD ni señal háptica nueva.
+        static var petalInterval: CGFloat { grabBudget / CGFloat(Scenery.flowerPetalCount) }
+    }
+
     // MARK: - Cámara
 
     enum Camera {
@@ -765,9 +784,9 @@ enum Tuning {
 
         /// Luz ambiente: el halo más ancho y tenue de todos, el que aclara la selva
         /// alrededor de Lumi. Radio en múltiplos de `Player.radius`.
-        static let ambientRadiusScale: CGFloat = 4.6
-        static let ambientAlpha: CGFloat = 0.13
-        /// Halo puente entre el halo del cuerpo (1,8·r) y el ambiente (4,6·r):
+        static let ambientRadiusScale: CGFloat = 3.6
+        static let ambientAlpha: CGFloat = 0.17
+        /// Halo puente entre el halo del cuerpo (1,8·r) y el ambiente (3,6·r):
         /// sin él, la luz caía a saltos y el canto del bloom se veía como un aro.
         static let midHaloRadiusScale: CGFloat = 2.9
         static let midHaloAlpha: CGFloat = 0.09
@@ -807,7 +826,7 @@ enum Tuning {
         /// Periodo de la respiración lenta del aura, en segundos.
         static let auraBreathPeriod: CGFloat = 3.4
         /// Amplitud (± fracción de alpha) de la respiración: la parte más visible.
-        static let auraBreathAmplitude: CGFloat = 0.16
+        static let auraBreathAmplitude: CGFloat = 0.10
         /// Periodo del temblor rápido, tipo llama que vibra.
         static let auraTremorPeriod: CGFloat = 0.55
         /// Amplitud del temblor: apenas perceptible, solo quita la fijeza.
@@ -815,12 +834,12 @@ enum Tuning {
         /// Cada cuántos segundos llega una caída de luz tipo vela.
         static let auraDipPeriod: CGFloat = 7.5
         /// Cuánto cae la luz en el valle de esa caída (fracción de alpha).
-        static let auraDipDepth: CGFloat = 0.30
+        static let auraDipDepth: CGFloat = 0.18
         /// Exponente que estrecha la caída: más alto = valle más breve y puntual.
         static let auraDipExponent: CGFloat = 6
         /// Suelo y techo del factor de parpadeo: el aura vive, no estroboscopea.
         static let auraFlickerMin: CGFloat = 0.55
-        static let auraFlickerMax: CGFloat = 1.30
+        static let auraFlickerMax: CGFloat = 1.12
         /// Qué fracción del parpadeo de alpha se traslada a la escala de la capa.
         static let auraScaleFraction: CGFloat = 0.35
         /// Jitter (± fracción) del periodo por capa: rompe cualquier unísono.
