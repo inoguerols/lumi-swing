@@ -57,10 +57,24 @@ def main():
     p.add_argument('--whats-new', help='novedades (es-ES) de la versión')
     p.add_argument('--whats-new-en', help='novedades (en-US); si falta, se reusa --whats-new')
     p.add_argument('--min-build', type=int, default=0, help='exigir número de build mínimo')
+    p.add_argument('--replace', action='store_true',
+                   help='si la versión está WAITING_FOR_REVIEW, cancelar ese envío y sustituir la build')
     args = p.parse_args()
 
     app_id = get(f'/apps?filter[bundleId]={BUNDLE}')['data'][0]['id']
     ver = get(f'/apps/{app_id}/appStoreVersions?limit=1')['data'][0]
+
+    if args.replace and not args.status:
+        for s in get(f'/reviewSubmissions?filter[app]={app_id}&filter[state]=WAITING_FOR_REVIEW')['data']:
+            call('PATCH', f"/reviewSubmissions/{s['id']}",
+                 {'data': {'type': 'reviewSubmissions', 'id': s['id'], 'attributes': {'canceled': True}}})
+            print('envío en cola cancelado:', s['id'])
+        # La versión tarda unos segundos en volver a ser editable tras cancelar.
+        for _ in range(12):
+            ver = get(f'/apps/{app_id}/appStoreVersions?limit=1')['data'][0]
+            if (ver['attributes'].get('appStoreState') or ver['attributes'].get('appVersionState')) in EDITABLES:
+                break
+            time.sleep(5)
     estado = ver['attributes'].get('appStoreState') or ver['attributes'].get('appVersionState')
     builds = get(f'/builds?filter[app]={app_id}&sort=-uploadedDate&limit=5')['data']
     build = next((b for b in builds if b['attributes']['processingState'] == 'VALID'
