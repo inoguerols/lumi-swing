@@ -49,3 +49,21 @@ struct GameCenterTests {
         #expect(!score.contains("m/s"))
     }
 }
+
+@Suite("Leaderboard diario")
+@MainActor
+struct DailyLeaderboardTests {
+
+    @Test("El leaderboard diario tiene ID propio")
+    func dailyLeaderboardHasOwnID() {
+        #expect(GameCenter.dailyLeaderboardID == "pendulo.diario")
+        #expect(GameCenter.dailyLeaderboardID != GameCenter.leaderboardID)
+        #expect(GameCenter.dailyLeaderboardID != GameCenter.paceLeaderboardID)
+    }
+
+    @Test("El valor del diario se muestra como puntos enteros")
+    func dailyDisplayValueIsPlainScore() {
+        #expect(GameCenter.displayValue(score: 17,
+                                        leaderboardID: GameCenter.dailyLeaderboardID) == "17")
+    }
+}

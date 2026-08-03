@@ -319,8 +319,8 @@ enum Tuning {
         /// Ventana de chunks materializados: el actual y tres por delante.
         static let liveChunkCount: Int = 4
 
-        /// Semilla del mundo mientras se tunea: fija, para que dos runs seguidos
-        /// sean comparables. En S6 pasa a ser aleatoria por partida.
+        /// Semilla fija de la demo y los tests (el plan de DemoPilot depende de
+        /// ella). El juego real usa la semilla diaria de `DailyWorld` (D-020).
         static let initialSeed: UInt64 = 0xC0FFEE
     }
 
@@ -363,6 +363,22 @@ enum Tuning {
         /// Cuántos muros a ciegas hay que cruzar con éxito antes de que el cartel
         /// deje de repetirse en cada zona nueva.
         static let noticeThreshold: Int = 6
+
+        // El muro de anticipo: una cata de la mecánica firma antes de la
+        // primera zona real, para quien muere en los muros 3-8 y nunca la vería.
+        // Un solo muro, fijo e independiente de la semilla (los momentos que
+        // enseñan no se sortean). Sin ×2, sin cartel, sin bonus de hueco.
+
+        /// Muro del anticipo: mediana de la banda de muertes tempranas (3-8) y
+        /// a 4 muros limpios de que el telégrafo del 11 empiece en el 10.
+        static let previewWall: Int = 6
+        /// Pico del velo en el anticipo. Las zonas reales llegan a `darkAlpha`
+        /// (0,96): el salto del muro 11 sigue siendo un acontecimiento.
+        static let previewVeilPeak: CGFloat = 0.6
+        /// Suelo de opacidad del muro anticipado: visible pero en penumbra.
+        /// Encaja en la escalera 1,0 normal > 0,5 anticipo > 0,35 eco > 0,12
+        /// asistido; por debajo de ~0,4 la visión periférica pierde el muro.
+        static let previewWallAlpha: CGFloat = 0.5
     }
 
     // MARK: - Aprendizaje de la mecánica a ciegas

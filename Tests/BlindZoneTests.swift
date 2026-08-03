@@ -186,3 +186,28 @@ struct BlindZoneTests {
                 "Mejor recorrido guiado solo por hápticos: \(best) puntos.\n\(report)")
     }
 }
+
+@Suite("Muro de anticipo")
+struct PreviewWallTests {
+
+    @Test("El muro de preview no es zona a ciegas ni puntúa doble")
+    func previewWallIsNotBlind() {
+        #expect(BlindZones.isPreview(wall: Tuning.BlindZone.previewWall))
+        #expect(!BlindZones.isBlind(wall: Tuning.BlindZone.previewWall))
+        #expect(!BlindZones.isPreview(wall: Tuning.BlindZone.firstWall))
+    }
+
+    @Test("El preview cae después del arranque y antes de la primera zona real")
+    func previewSitsInTheTeachingGap() {
+        #expect(Tuning.BlindZone.previewWall > 3)
+        #expect(Tuning.BlindZone.previewWall < Tuning.BlindZone.firstWall - 2)
+    }
+
+    @Test("La escalera de opacidades no se pisa: normal > preview > eco > asistido")
+    func alphaLadderIsOrdered() {
+        #expect(Tuning.BlindZone.previewWallAlpha < 1)
+        #expect(Tuning.BlindTeaching.initialAlpha < Tuning.BlindZone.previewWallAlpha)
+        #expect(Tuning.BlindZone.assistedOutlineAlpha < Tuning.BlindTeaching.initialAlpha)
+        #expect(Tuning.BlindZone.previewVeilPeak < Tuning.BlindZone.darkAlpha)
+    }
+}

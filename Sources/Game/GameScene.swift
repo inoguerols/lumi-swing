@@ -7,7 +7,10 @@ import UIKit
 /// (ver D-002 en docs/decisiones.md).
 final class GameScene: SKScene {
 
-    private var simulation = GameSimulation(seed: Tuning.WorldGen.initialSeed)
+    // La demo juega siempre el mundo fijo (el plan de DemoPilot depende de esa
+    // semilla); el juego real juega el mundo del día.
+    private var simulation = GameSimulation(
+        seed: GameScene.isDemo ? Tuning.WorldGen.initialSeed : DailyWorld.seed())
     private var holding = false
     private var lastUpdateTime: TimeInterval?
 
@@ -1135,7 +1138,9 @@ final class GameScene: SKScene {
     /// cuesta un frame. Instanciar una `SKScene` nueva se comería el presupuesto
     /// de 300 ms del brief entero.
     private func restart() {
-        simulation.reset(seed: Tuning.WorldGen.initialSeed)
+        // La semilla se refresca por partida: cruzar la medianoche UTC con la
+        // app abierta estrena mundo en el run siguiente, nunca a mitad de uno.
+        simulation.reset(seed: Self.isDemo ? Tuning.WorldGen.initialSeed : DailyWorld.seed())
         demoStep = 0
         demoAccumulator = 0
         for node in chunkNodes.values { node.removeFromParent() }
@@ -1277,14 +1282,37 @@ final class GameScene: SKScene {
         // Antes conmutaba en el instante de cruzar el muro: ahora la rampa sigue
         // la distancia al muro de entrada, así que la noche se ve venir en vez de
         // caer encima.
-        let target = simulation.blindZoneTelegraph
-        let rate = 1 / Tuning.BlindZone.darkenDuration
-        darkness = lerp(darkness, target, 1 - exponentialDecay(rate: rate, dt: dt))
-
         let peak = settings.reduceFlashing
             ? Tuning.BlindZone.reducedDarkAlpha
             : Tuning.BlindZone.darkAlpha
+
+        var target = simulation.blindZoneTelegraph
+        // El muro de anticipo: la misma rampa por distancia, pero con techo en
+        // `previewVeilPeak` — penumbra, no noche. Solo cuando ninguna zona real
+        // está en juego: si ambas coincidieran en pantalla, la real manda.
+        if target == 0, let next = simulation.nextChunk,
+           BlindZones.isPreview(wall: next.index),
+           let distance = simulation.distanceToNextWall {
+            let spacing = DifficultyCurve.spacing(forWall: next.index - 1)
+            let progress = BlindZones.telegraphProgress(distanceToEntry: distance,
+                                                        wallSpacing: spacing)
+            target = progress * min(1, Tuning.BlindZone.previewVeilPeak / peak)
+        }
+
+        let rate = 1 / Tuning.BlindZone.darkenDuration
+        darkness = lerp(darkness, target, 1 - exponentialDecay(rate: rate, dt: dt))
         darknessNode.alpha = darkness * peak
+    }
+
+    /// 0-1: cuánto está «dentro» del anticipo ahora mismo, derivado del velo.
+    /// 1 cuando el velo del preview llegó a su techo; 0 fuera de él.
+    private var previewProgress: CGFloat {
+        let peak = settings.reduceFlashing
+            ? Tuning.BlindZone.reducedDarkAlpha
+            : Tuning.BlindZone.darkAlpha
+        let ceiling = min(1, Tuning.BlindZone.previewVeilPeak / peak)
+        guard ceiling > 0 else { return 0 }
+        return clamp(darkness / ceiling, 0, 1)
     }
 
     /// Traduce «estoy a ciegas» a volumen de ambiente. Escalonado como el mapa
@@ -1344,8 +1372,12 @@ final class GameScene: SKScene {
     /// diciendo casi lo mismo.
     private func feedHapticMap() {
         let channelsOff = !settings.hapticsEnabled && !settings.audioEnabled
+        // El mapa háptico habla también en el muro de anticipo, a plena spec:
+        // reutilizar la señal con su significado exacto es entrenamiento de
+        // vocabulario, no gasto de sorpresa.
+        let previewActive = simulation.nextChunk.map { BlindZones.isPreview(wall: $0.index) } ?? false
         guard !channelsOff,
-              simulation.isBlind,
+              simulation.isBlind || previewActive,
               let distance = simulation.distanceToNextWall else {
             guard proximityBucket != nil || alignmentBucket != nil else { return }
             proximityBucket = nil
@@ -1447,6 +1479,13 @@ final class GameScene: SKScene {
             chunkNodes[chunk.index]?
                 .childNode(withName: Self.echoNodeName)?
                 .alpha = echoAlpha
+        }
+        // El muro de anticipo también respira con el velo (sin eco: no es una
+        // zona a ciegas, es su cata).
+        for chunk in simulation.chunks where BlindZones.isPreview(wall: chunk.index) {
+            chunkNodes[chunk.index]?
+                .childNode(withName: Self.wallsNodeName)?
+                .alpha = wallAlpha(for: chunk)
         }
 
         playerNode.position = simulation.body.position
@@ -1994,6 +2033,12 @@ final class GameScene: SKScene {
     }
 
     private func wallAlpha(for chunk: Chunk) -> CGFloat {
+        // El muro anticipado se apaga solo hasta la penumbra (0,5), nunca más:
+        // sigue siendo un muro que se ve, y NO late — el latido de silueta es
+        // vocabulario reservado al eco de las zonas reales.
+        if BlindZones.isPreview(wall: chunk.index) {
+            return lerp(1, Tuning.BlindZone.previewWallAlpha, previewProgress)
+        }
         guard chunk.isBlind else { return 1 }
         // El contorno tenue aparece si no hay Taptic Engine, si el jugador ha
         // apagado los hápticos, o si lo ha pedido por accesibilidad. Los tres casos

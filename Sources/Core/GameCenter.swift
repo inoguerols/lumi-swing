@@ -18,6 +18,11 @@ enum GameCenter {
     /// migración de puntuaciones previas).
     static let paceLeaderboardID = "pendulo.ritmo"
 
+    /// El mundo de hoy: leaderboard **recurrente** de 24 h (medianoche UTC, el
+    /// mismo reloj que rota la semilla de `DailyWorld`). Es la cita diaria: tus
+    /// vecinos jugaron exactamente el mismo trazado que tú.
+    static let dailyLeaderboardID = "pendulo.diario"
+
     /// Las tres vistas del ranking, en el idioma del juego y no en el de GameKit:
     /// así la interfaz no tiene que importar GameKit para hablar de clasificaciones.
     enum Scope: String, CaseIterable, Identifiable {
@@ -62,11 +67,12 @@ enum GameCenter {
     /// que el histórico: en el de siempre están los diez de siempre y nadie más se
     /// molesta en competir, mientras que el semanal se resetea y todo el mundo tiene
     /// una oportunidad cada lunes. Por eso es el que se abre por defecto.
-    static func showLeaderboard(timeScope: GKLeaderboard.TimeScope = .week,
+    static func showLeaderboard(id: String = GameCenter.leaderboardID,
+                                timeScope: GKLeaderboard.TimeScope = .week,
                                 playerScope: GKLeaderboard.PlayerScope = .global) {
         guard isAuthenticated else { return }
 
-        let controller = GKGameCenterViewController(leaderboardID: leaderboardID,
+        let controller = GKGameCenterViewController(leaderboardID: id,
                                                     playerScope: playerScope,
                                                     timeScope: timeScope)
         controller.gameCenterDelegate = delegate
@@ -104,6 +110,12 @@ enum GameCenter {
                                                      context: 0,
                                                      player: GKLocalPlayer.local,
                                                      leaderboardIDs: [leaderboardID])
+            }
+            Task {
+                try? await GKLeaderboard.submitScore(score,
+                                                     context: 0,
+                                                     player: GKLocalPlayer.local,
+                                                     leaderboardIDs: [dailyLeaderboardID])
             }
         }
         if paceMetersPerSecond > 0 {
@@ -204,8 +216,10 @@ enum GameCenter {
     /// viaja en décimas de m/s (ver `submit`). Deshacer esa multiplicación es cosa
     /// de aquí: la vista pinta el texto que se le da.
     static func displayValue(score: Int, leaderboardID: String) -> String {
-        guard leaderboardID == paceLeaderboardID else { return score.formatted() }
-        return speedText(metersPerSecond: Double(score) / 10)
+        switch leaderboardID {
+        case paceLeaderboardID: return speedText(metersPerSecond: Double(score) / 10)
+        default: return score.formatted()
+        }
     }
 
     /// «12,3 m/s» con el separador decimal del idioma del jugador (en inglés es un

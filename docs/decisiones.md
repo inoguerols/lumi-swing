@@ -222,3 +222,25 @@ Lo que **no** se puede verificar en este entorno: cómo se sienten. El simulador
 **Hápticos:** ni pétalo ni caída estrenan señal (el vocabulario es cerrado: seis señales). La caída reutiliza el transient de Suelta — significa «estás desenganchado», y es verdad.
 
 **Puerta de calidad:** `WitherTests` extiende D-008 con el bot de búsqueda aleatoria soltado tras el muro 13: el tramo marchito debe seguir siendo superable.
+
+---
+
+## 2026-08-03 · D-020 · El mundo cambia cada día; los récords, no
+
+**Decisión:** la semilla del mundo deriva de la fecha en UTC (`DailyWorld.seed`): todo el mundo juega el mismo trazado el mismo día, y a medianoche UTC el mundo rota. Leaderboard **recurrente** de 24 h `pendulo.diario` («Mundo de hoy»), con el mismo reloj. El global `pendulo.highscore` se mantiene como leaderboard principal del menú, y la demo y los tests conservan la semilla fija `initialSeed` — el plan pre-buscado de DemoPilot solo vale para ella.
+
+**Por qué:** con semilla fija el juego entero era un único nivel estático: el meta degeneraba en memorizar el trazado — la habilidad contraria a la que el juego celebra — y no había ninguna razón para volver mañana. La semilla diaria arregla ambas de un golpe sin tocar ningún pilar: la memorización caduca a medianoche y la cita diaria existe sin misiones, monedas ni notificaciones. Las zonas a ciegas y el muro de anticipo son funciones puras del índice de muro, independientes de la semilla: los momentos que enseñan no se sortean.
+
+**Fleco asumido:** hay días más amables que otros (la semilla sortea centros de hueco y jitter de anclas), así que el global premia parcialmente «quién jugó el día bueno». Varianza modesta y aceptada — cada puerta tiene su llave por construcción —; que quede escrito para que nadie lo «descubra» como bug.
+
+**Racha:** única meta-progresión añadida (`streakDays`, días UTC consecutivos con al menos una partida, mismo reloj que el mundo). Cuenta días, no exige nada: sin misiones, sin castigo, una línea en el menú solo cuando ya es racha (≥2). El game over enseña el mini-ranking del DÍA con cabecera «Hoy» — tus vecinos jugaron tus mismas puertas; el global sigue en «Clasificación».
+
+**Candidato v1.2 (no implementar aún):** coronas de días ganados vía `loadPreviousOccurrence` del recurrente. Con pocos jugadores, el mismo ganaría todo y desmotivaría; esperar a que el diario tenga competencia real.
+
+---
+
+## 2026-08-03 · D-021 · El anticipo de la firma y el aviso del canal
+
+**Decisión:** el muro 6 es el **anticipo** de la mecánica firma: velo parcial (`previewVeilPeak` 0,6 frente al 0,96 real), muro en penumbra visible (`previewWallAlpha` 0,5, sin latir — el latido de silueta es vocabulario del eco de las zonas reales), hápticos de proximidad y alineación a plena spec, sin ×2, sin cartel, sin bonus de hueco, sin contar en `blindZonesEntered`. Un solo muro, fijo e independiente de la semilla. Y el menú avisa del canal («Lumi habla por el tacto: juega con el móvil en la mano», o su variante de audio si no hay Taptic Engine) hasta 3 veces o hasta la primera zona a ciegas vivida.
+
+**Por qué:** la mecánica firma llegaba en el muro 11 y buena parte de los jugadores muere en los muros 3-8 sin verla jamás — el juego se dejaba juzgar por lo que no es. El anticipo es una cata (~1,3 s): entrada, tren de proximidad, salida — el vocabulario completo una vez, con los ojos aún puestos. La escalera de opacidades queda 1,0 normal > 0,5 anticipo > 0,35 eco > 0,12 asistido; por debajo de ~0,4 la visión periférica pierde el muro y mataría a quien aún no habla háptico. El aviso existe porque la firma depende de un canal que el jugador puede tener apagado sin saberlo: degradar en silencio era regalar la primera impresión.

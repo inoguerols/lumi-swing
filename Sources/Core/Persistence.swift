@@ -17,6 +17,11 @@ final class GameSettings {
         static let reduceFlashing = "pendulo.reduceFlashing"
         static let blindWallsCrossed = "pendulo.blindWallsCrossed"
         static let blindZonesEntered = "pendulo.blindZonesEntered"
+        static let totalRuns = "pendulo.totalRuns"
+        static let totalWallsCrossed = "pendulo.totalWallsCrossed"
+        static let streakDays = "pendulo.streakDays"
+        static let lastPlayedDay = "pendulo.lastPlayedDay"
+        static let hapticNoticeRuns = "pendulo.hapticNoticeRuns"
     }
 
     private let defaults: UserDefaults
@@ -60,6 +65,31 @@ final class GameSettings {
         didSet { defaults.set(blindZonesEntered, forKey: Key.blindZonesEntered) }
     }
 
+    /// Partidas jugadas, en total, desde la instalación.
+    var totalRuns: Int {
+        didSet { defaults.set(totalRuns, forKey: Key.totalRuns) }
+    }
+
+    /// Muros cruzados acumulados entre todas las partidas.
+    var totalWallsCrossed: Int {
+        didSet { defaults.set(totalWallsCrossed, forKey: Key.totalWallsCrossed) }
+    }
+
+    /// Días de calendario UTC consecutivos con al menos una partida.
+    var streakDays: Int {
+        didSet { defaults.set(streakDays, forKey: Key.streakDays) }
+    }
+
+    /// Último día jugado, como ordinal de `DailyWorld.dayOrdinal`. 0 = nunca.
+    var lastPlayedDay: Int {
+        didSet { defaults.set(lastPlayedDay, forKey: Key.lastPlayedDay) }
+    }
+
+    /// Cuántas veces se ha enseñado ya el aviso de hápticos del menú.
+    var hapticNoticeRuns: Int {
+        didSet { defaults.set(hapticNoticeRuns, forKey: Key.hapticNoticeRuns) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.best = defaults.integer(forKey: Key.best)
@@ -73,6 +103,11 @@ final class GameSettings {
         self.reduceFlashing = defaults.bool(forKey: Key.reduceFlashing)
         self.blindWallsCrossed = defaults.integer(forKey: Key.blindWallsCrossed)
         self.blindZonesEntered = defaults.integer(forKey: Key.blindZonesEntered)
+        self.totalRuns = defaults.integer(forKey: Key.totalRuns)
+        self.totalWallsCrossed = defaults.integer(forKey: Key.totalWallsCrossed)
+        self.streakDays = defaults.integer(forKey: Key.streakDays)
+        self.lastPlayedDay = defaults.integer(forKey: Key.lastPlayedDay)
+        self.hapticNoticeRuns = defaults.integer(forKey: Key.hapticNoticeRuns)
     }
 
     /// Devuelve `true` si el resultado es un récord nuevo.
@@ -91,6 +126,19 @@ final class GameSettings {
         return true
     }
 
+    /// Un run terminado: acumula totales y mantiene la racha de días. La racha
+    /// cuenta días de calendario UTC consecutivos con al menos una partida —
+    /// el mismo reloj que rota el mundo diario, para que «volví hoy» signifique
+    /// lo mismo en los dos sitios.
+    func registerRun(score: Int, dayOrdinal: Int) {
+        totalRuns += 1
+        totalWallsCrossed += score
+        if dayOrdinal != lastPlayedDay {
+            streakDays = (dayOrdinal == lastPlayedDay + 1) ? streakDays + 1 : 1
+            lastPlayedDay = dayOrdinal
+        }
+    }
+
     /// Cuándo hay que enseñar los muros a ciegas de todos modos: porque el jugador
     /// lo ha pedido, o porque ha apagado el canal que los sustituía.
     var needsAssistedBlindZones: Bool {
@@ -101,5 +149,12 @@ final class GameSettings {
     /// ciegas, el cartel explicativo se sigue enseñando en cada zona nueva.
     var needsBlindNotice: Bool {
         blindWallsCrossed < Tuning.BlindZone.noticeThreshold
+    }
+
+    /// El aviso «Lumi habla por el tacto» del menú: sale hasta tres veces, o
+    /// hasta que el jugador vive su primera zona a ciegas — lo que llegue antes.
+    /// A quien ya la ha vivido no hay que explicarle cómo se sostiene el móvil.
+    var needsHapticNotice: Bool {
+        hapticNoticeRuns < 3 && blindZonesEntered == 0
     }
 }
