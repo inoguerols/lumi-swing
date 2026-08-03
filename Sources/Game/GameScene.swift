@@ -7,7 +7,10 @@ import UIKit
 /// (ver D-002 en docs/decisiones.md).
 final class GameScene: SKScene {
 
-    private var simulation = GameSimulation(seed: Tuning.WorldGen.initialSeed)
+    // La demo juega siempre el mundo fijo (el plan de DemoPilot depende de esa
+    // semilla); el juego real juega el mundo del día.
+    private var simulation = GameSimulation(
+        seed: GameScene.isDemo ? Tuning.WorldGen.initialSeed : DailyWorld.seed())
     private var holding = false
     private var lastUpdateTime: TimeInterval?
 
@@ -1135,7 +1138,9 @@ final class GameScene: SKScene {
     /// cuesta un frame. Instanciar una `SKScene` nueva se comería el presupuesto
     /// de 300 ms del brief entero.
     private func restart() {
-        simulation.reset(seed: Tuning.WorldGen.initialSeed)
+        // La semilla se refresca por partida: cruzar la medianoche UTC con la
+        // app abierta estrena mundo en el run siguiente, nunca a mitad de uno.
+        simulation.reset(seed: Self.isDemo ? Tuning.WorldGen.initialSeed : DailyWorld.seed())
         demoStep = 0
         demoAccumulator = 0
         for node in chunkNodes.values { node.removeFromParent() }
