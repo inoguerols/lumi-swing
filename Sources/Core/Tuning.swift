@@ -17,6 +17,26 @@ enum Tuning {
         static let sceneWidth: CGFloat = 900
         static let sceneHeight: CGFloat = 1950
 
+        /// Tope de ancho de escena: el iPad 4:3 exacto (1950 × 1024/1366). Más
+        /// ancho no existe en hardware con `UIRequiresFullScreen`, el cielo solo
+        /// cubre ±900 desde la cámara, y más anticipación sería otro juego (D-023).
+        static let maxSceneWidth: CGFloat = 1462
+
+        /// Tamaño de escena para una vista dada: altura fija (la geometría
+        /// vertical — suelo, techo, HUD, flor llave — es idéntica en todos los
+        /// dispositivos) y ancho según el aspecto real, entre el diseño iPhone
+        /// y el iPad 4:3. En pantallas más estrechas que 900:1950 el ancho se
+        /// queda en 900 y `.aspectFill` aplica el microrrecorte lateral de
+        /// siempre (D-023).
+        static func sceneSize(for viewSize: CGSize) -> CGSize {
+            guard viewSize.height > 0 else {
+                return CGSize(width: sceneWidth, height: sceneHeight)
+            }
+            let width = min(max(sceneHeight * viewSize.width / viewSize.height,
+                                sceneWidth), maxSceneWidth)
+            return CGSize(width: width, height: sceneHeight)
+        }
+
         /// Franja jugable, centrada verticalmente. Es lo que garantizamos idéntico
         /// en todos los dispositivos: en un iPhone SE (ratio 1,78) `.aspectFill`
         /// deja ver ~1600 pt de alto, suficiente para cubrir estos 1500. Lo que

@@ -136,6 +136,8 @@ Sustitución **completa y automática**, sin preguntar:
 
 **Y además** se activa el *refuerzo visual asistido*: en zona a ciegas los muros no desaparecen del todo, se dibujan con un contorno al 12 % de opacidad y aparecen anillos de proximidad concéntricos. Sin Taptic, la ceguera total no es un reto: es un muro.
 
+Desde la v1.1 universal (D-023, `decisiones.md`), iPad y Mac (Designed for iPad) entran **siempre** por esta vía de sustitución completa — ningún modelo de esa familia tiene Taptic Engine, así que no hay detección que hacer: es la ruta ya probada, no un caso nuevo.
+
 ### 6.2 Modo silencio (interruptor lateral)
 
 Core Haptics **no** depende del interruptor de silencio: los hápticos siguen funcionando. El audio sí se calla, porque la sesión de audio usa la categoría `.ambient` (respetamos la música del jugador y el interruptor; forzar `.playback` para colar nuestros pitidos en modo silencio sería hostil).

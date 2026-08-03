@@ -53,6 +53,9 @@ targets:
         UIRequiresFullScreen: true
         UIStatusBarHidden: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
         # ProMotion: sin esto iOS limita el juego a 60 Hz.
         CADisableMinimumFrameDurationOnPhone: true
         # Mismo verde y misma luciérnaga que el menú, para que el paso de la
@@ -66,8 +69,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.noguerol.lumiswing
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Solo iPhone, solo portrait: decision D-003 en docs/decisiones.md
-        TARGETED_DEVICE_FAMILY: "1"
+        # Universal iPhone/iPad/Mac: decision D-023 en docs/decisiones.md.
+        # Portrait sigue bloqueado (D-003); en iPad es legal gracias a
+        # UIRequiresFullScreen: true (ver info.properties de este target).
+        TARGETED_DEVICE_FAMILY: "1,2"
 
   LumiSwingTests:
     type: bundle.unit-test

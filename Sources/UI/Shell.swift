@@ -57,6 +57,8 @@ private struct Card<Content: View>: View {
                     .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
             }
             .shadow(color: .black.opacity(0.6), radius: 34, y: 14)
+            // Ancho tope: en iPad/Mac la tarjeta no debe estirarse a todo el ancho de pantalla.
+            .frame(maxWidth: 520)
             .padding(.horizontal, 24)
     }
 }
@@ -203,7 +205,7 @@ struct MenuView: View {
                 if settings.needsHapticNotice {
                     Text(hapticsSupported
                          ? "Lumi habla por el tacto:\njuega con el móvil en la mano."
-                         : "Este iPhone no vibra:\nel audio te guía — sube el volumen.")
+                         : "Este dispositivo no vibra:\nel audio te guía — sube el volumen.")
                         .font(.system(.footnote, design: .rounded))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(flowerCyan.opacity(0.9))

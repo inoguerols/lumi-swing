@@ -250,3 +250,17 @@ Lo que **no** se puede verificar en este entorno: cómo se sienten. El simulador
 ## 2026-08-03 · D-022 · El fondo no puede irse: wrapping de parallax, lianas y coronas
 
 **Decisión:** (1) las capas de parallax se desplazan en **módulo del ancho de loseta** — antes el dosel cercano se salía de pantalla hacia el muro 5, el lejano hacia el 13 y la luna hacia el 15, y el juego quedaba pelado: era esto, y no falta de decoración, lo que hacía el mundo «vacío» al avanzar (la luna pasa a orbitar con periodo largo en vez de irse para siempre). (2) **Lianas del plano medio** (parallax 0,58, entre dosel y juego): silueta oscura horneada a textura —cero `SKShapeNode`—, 5 por loseta, sin brillo jamás: *lo que brilla informa*. (3) **Coronas** (adelantadas de v1.2 por decisión de Nacho): días terminados como nº1 del «Mundo de hoy». Al arrancar se consulta la ocurrencia anterior del recurrente (`loadPreviousOccurrence`); `GameSettings.awardCrown` es monótona por día (jamás duplica ni premia hacia atrás) y el total va al leaderboard clásico `pendulo.coronas` (ya en ASC, es/en). En el menú comparten línea con la racha; todo fallo de red degrada en silencio.
+
+---
+
+## 2026-08-03 · D-023 · Universal iPad/Mac: altura fija, ancho variable
+
+**Contexto:** la v1.1 se hace universal (iPhone+iPad) y disponible en Mac Apple Silicon («Designed for iPad», checkbox de ASC, sin target nuevo). El fallback sin Taptic Engine (`lenguaje-haptico.md` §6.1, audio sustitutivo + refuerzo visual) ya estaba implementado y probado, así que la sensorial estaba resuelta; el problema era el encuadre: la escena fija 900×1950 con `.aspectFill` recortaba ~375 pt verticales en iPad 4:3 — suelo y techo mataban desde fuera de pantalla (`Collision.swift`), la flor llave del muro siguiente podía quedar fuera del encuadre y el marcador (`scoreOffsetY` 600) caía en el borde.
+
+**Decisión:** la escena mantiene altura 1950 y toma ancho = 1950 × aspecto de la vista, clampeado a [900, 1462] (1462 = iPad 4:3 exacto, `Tuning.World.maxSceneWidth`). iPad ve la misma franja vertical ±975 que iPhone (misma geometría de juego); el ancho extra lo cubre el bleed del arte ya existente (cielo ±900 > 731 de semiancho visible; doseles ±2025; velo 3900). El `lookAhead` de cámara queda constante en puntos de juego (0,22·900 = 198). Mecanismo: `Tuning.World.sceneSize(for:)` + `onGeometryChange` sobre el `SpriteView`.
+
+**Relación con D-003:** la modula, no la revoca — portrait sigue bloqueado con los mismos argumentos; solo se amplía la familia de dispositivos.
+
+**Sin compensación de dificultad en iPad:** más campo visual hace el juego algo más fácil; aceptado en un hiper-casual, y las zonas a ciegas (la mecánica firma) son inmunes por definición. Palanca documentada si el playtest lo pide: subir levemente el zoom base de cámara cuando `scene.size.width > 900`.
+
+**Descartado:** aspectFit (el letterbox pinta `backgroundColor`, no arte), zoom de cámara (interacciona con la intro, que ya anima `setScale`), y asumir el recorte (rompe gameplay).

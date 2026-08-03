@@ -95,6 +95,12 @@ resto los deduce. Mínimo 3, máximo 10, y **las tres primeras son las que se ve
 los resultados de búsqueda** — pon primero la de la luciérnaga colgando con la
 liana tensa.
 
+**iPad 13" (desde v1.1 universal, D-023):** simulador «iPad Pro 13-inch» (el
+que haya instalado, hoy M5),
+2064×2752, mismas flags `-autoplay -demo`, guardar en `capturas/ipad/`. Apple
+exige capturas de iPad al publicar una app disponible para iPad — sin ellas la
+ficha no pasa de borrador para ese destino.
+
 ---
 
 ## 5. Game Center
@@ -120,6 +126,10 @@ clasificación: no hay que crear nada más. El juego abre el semanal por defecto
 ## 6. Precio
 
 **Precios y disponibilidad** → **Gratis**, todos los territorios.
+
+**Disponible en Mac con Apple Silicon (desde v1.1 universal, D-023):** en la
+misma sección, activa el checkbox **«Disponible en Mac con Apple Silicon»**
+(«Designed for iPad», sin target nuevo).
 
 ---
 
@@ -186,6 +196,10 @@ El camino manual de arriba (§7) ya no hace falta:
 1. **Merge/push a `main`** → Xcode Cloud compila, firma y sube la build a
    TestFlight él solo (workflow "Default", distribución `APP_STORE_ELIGIBLE`;
    `ci_scripts/ci_post_clone.sh` genera el proyecto con XcodeGen).
+
+   ⚠️ **Universal (desde v1.1, D-023):** añade un destino de simulador iPad al
+   workflow de tests en App Store Connect (web → Xcode Cloud → workflow →
+   Tests). No está versionado, no lo trae el `.yml` del repo.
 2. **Enviar a revisión** (cuando la versión en ASC está editable):
 
    ```bash

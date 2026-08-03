@@ -51,6 +51,13 @@ struct RootView: View {
         ZStack {
             SpriteView(scene: scene, preferredFramesPerSecond: 120)
                 .ignoresSafeArea()
+                // Altura fija, ancho según el aspecto de la vista (D-023): en
+                // iPad/Mac la escena se ensancha en vez de recortarse en
+                // vertical, que escondería suelo, techo y la flor llave. Nadie
+                // lee `scene.size` después del init, así que mutarlo es seguro.
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { viewSize in
+                    scene.size = Tuning.World.sceneSize(for: viewSize)
+                }
 
             // El enjambre solo fuera de la partida: durante el juego competiría con
             // las luces que sí informan, y a ciegas sería directamente ruido.

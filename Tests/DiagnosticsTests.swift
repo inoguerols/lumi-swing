@@ -342,7 +342,9 @@ struct DiagnosticsTests {
     @Test("Cuánto tiempo ve el jugador el muro antes de llegar")
     func reactionWindow() {
         // La cámara va adelantada, así que el borde derecho de la pantalla queda a
-        // esta distancia por delante del jugador.
+        // esta distancia por delante del jugador. sceneWidth = el dispositivo más
+        // estrecho (iPhone): este es el caso MÍNIMO garantizado; cualquier iPad
+        // ve más ancho (D-023) y por tanto más ventana, nunca menos.
         let halfScreen = Tuning.World.sceneWidth / 2
         let lookAhead = Tuning.World.sceneWidth * Tuning.Camera.lookAheadFactor
         let visibleAhead = halfScreen + lookAhead
@@ -369,6 +371,20 @@ struct DiagnosticsTests {
         // reacción, no anticipación. El pilar 2 pide lo segundo.
         #expect(seconds > 0.9,
                 "Solo \(String(format: "%.2f", Double(seconds))) s desde que el muro entra en pantalla")
+    }
+
+    @Test("En iPad la ventana de reacción solo puede crecer")
+    func reactionWindowOnPad() {
+        // D-023: en iPad la escena se ensancha hasta maxSceneWidth con el mismo
+        // lookAhead en puntos de juego, así que el muro entra en pantalla antes
+        // que en iPhone. Si esto falla, el clamp o el lookAhead han cambiado de
+        // forma que iPad ve MENOS que el mínimo garantizado — revisar D-023.
+        let phoneVisible = Tuning.World.sceneWidth / 2
+            + Tuning.World.sceneWidth * Tuning.Camera.lookAheadFactor
+        let padVisible = Tuning.World.maxSceneWidth / 2
+            + Tuning.World.sceneWidth * Tuning.Camera.lookAheadFactor
+        #expect(padVisible > phoneVisible)
+        #expect(padVisible / Tuning.Player.initialVelocityX > 0.9)
     }
 
     // MARK: - ¿El bombeo se va de las manos?

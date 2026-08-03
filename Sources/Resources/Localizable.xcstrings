@@ -79,13 +79,13 @@
         }
       }
     },
-    "Este iPhone no vibra:\nel audio te guía — sube el volumen.": {
+    "Este dispositivo no vibra:\nel audio te guía — sube el volumen.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This iPhone can't vibrate:\naudio guides you — turn the volume up."
+            "value": "This device can't vibrate:\naudio guides you — turn the volume up."
           }
         }
       }
