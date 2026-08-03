@@ -6,6 +6,10 @@ enum GameEvent: Sendable, Equatable {
     case grabbed
     case released
     case missedGrab
+    /// Una flor marchita agotó su presupuesto de agarre y cayó, soltando a Lumi
+    /// con su velocidad exacta. Lleva la posición de la flor para que la escena
+    /// sepa cuál animar.
+    case flowerFell(CGPoint)
     /// Cuántos puntos sumó ese muro: 1, o el doble si era a ciegas.
     case scored(Int)
     case died(ObstacleKind)
@@ -60,6 +64,54 @@ struct GameSimulation: Sendable {
     }
 
     var anchors: [Anchor] { chunks.flatMap(\.anchors) }
+
+    /// Identidad de una flor: el muro al que pertenece y su hueco en la lista de
+    /// anclas. Las `Anchor` son valores sin identidad propia, pero un chunk vivo
+    /// nunca cambia de anclas y los índices de muro no se repiten en una partida,
+    /// así que el par es estable mientras la flor exista.
+    struct FlowerID: Hashable, Sendable {
+        let wall: Int
+        let slot: Int
+    }
+
+    /// Segundos de agarre ya gastados por flor marchita. Acumulativo a propósito:
+    /// reiniciar al soltar permitiría descansar infinito a base de micro-toques,
+    /// que es justo lo que la mecánica existe para impedir.
+    private var witherSpent: [FlowerID: CGFloat] = [:]
+    /// Flores que ya cayeron. No se pueden volver a agarrar.
+    private var fallenFlowers: Set<FlowerID> = []
+
+    private func flowerID(at position: CGPoint) -> FlowerID? {
+        for chunk in chunks where chunk.index >= Tuning.Wither.firstWall {
+            for (slot, anchor) in chunk.anchors.enumerated()
+            where anchor.position == position {
+                return FlowerID(wall: chunk.index, slot: slot)
+            }
+        }
+        return nil
+    }
+
+    /// Anclas a las que aún se puede agarrar: todas menos las flores caídas.
+    private var grabbableAnchors: [Anchor] {
+        chunks.flatMap { chunk in
+            chunk.anchors.enumerated()
+                .filter { !fallenFlowers.contains(FlowerID(wall: chunk.index, slot: $0.offset)) }
+                .map(\.element)
+        }
+    }
+
+    /// 0 = flor intacta, 1 = presupuesto agotado (o flor ya caída). Para las
+    /// flores anteriores a `Wither.firstWall` siempre es 0.
+    func witherProgress(wall: Int, slot: Int) -> CGFloat {
+        guard wall >= Tuning.Wither.firstWall else { return 0 }
+        let id = FlowerID(wall: wall, slot: slot)
+        if fallenFlowers.contains(id) { return 1 }
+        return min(1, (witherSpent[id] ?? 0) / Tuning.Wither.grabBudget)
+    }
+
+    func flowerHasFallen(wall: Int, slot: Int) -> Bool {
+        fallenFlowers.contains(FlowerID(wall: wall, slot: slot))
+    }
 
     /// El muro que el jugador tiene delante. Es el que define todo lo que pasa a
     /// ciegas: la distancia que marca el ritmo y el hueco que marca la alineación.
@@ -121,6 +173,8 @@ struct GameSimulation: Sendable {
         isDead = false
         wasBlind = false
         bestPace = 0
+        witherSpent = [:]
+        fallenFlowers = []
         paceBucketSums = Array(repeating: 0, count: Tuning.Pace.bucketCount)
         paceBucketDurations = Array(repeating: 0, count: Tuning.Pace.bucketCount)
         paceBucketEpochs = Array(repeating: -1, count: Tuning.Pace.bucketCount)
@@ -134,7 +188,7 @@ struct GameSimulation: Sendable {
 
         // El input es un flanco, no un estado: pulsar engancha una vez, no cada frame.
         if holding, !wasHolding {
-            events.append(body.grab(anchors: anchors) ? .grabbed : .missedGrab)
+            events.append(body.grab(anchors: grabbableAnchors) ? .grabbed : .missedGrab)
         } else if !holding, wasHolding, body.isAttached {
             body.release()
             events.append(.released)
@@ -145,6 +199,19 @@ struct GameSimulation: Sendable {
         // El mismo techo que aplica `PendulumBody` a sus subpasos: tras un hipo
         // real, un dt enorme pesaría de más en la media en vez de descartarse.
         recordPace(dt: min(dt, Tuning.Pendulum.maxFrameDelta), speed: body.velocity.length)
+
+        // Marchitado: colgarse de una flor marchita consume su presupuesto. Al
+        // agotarse, la flor cae y suelta a Lumi con su velocidad exacta — sin
+        // boost: el impulso extra es el premio de soltarse a tiempo.
+        if let attachment = body.attachment, let id = flowerID(at: attachment.anchor) {
+            let spent = (witherSpent[id] ?? 0) + min(dt, Tuning.Pendulum.maxFrameDelta)
+            witherSpent[id] = spent
+            if spent >= Tuning.Wither.grabBudget {
+                fallenFlowers.insert(id)
+                body.release(boosted: false)
+                events.append(.flowerFell(attachment.anchor))
+            }
+        }
 
         if let obstacle = Collision.hit(position: body.position,
                                         radius: Tuning.Player.radius,

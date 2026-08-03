@@ -208,3 +208,17 @@ El agente de ese test no ve la geometría: recibe exactamente lo mismo que un de
 ## 2026-07-30 · S3 completado — lo que sigue sin poder validarse aquí
 
 Lo que **no** se puede verificar en este entorno: cómo se sienten. El simulador no tiene Taptic Engine — `supportsHaptics` devuelve `false` y todo cae al sustituto de audio. La pantalla de debug (cinco toques en la esquina superior izquierda) existe precisamente para eso: es el instrumento con el que hay que sentarse con el iPhone y ajustar. Hasta entonces, los valores de `Tuning.Haptics` son un diseño razonado, no una medición.
+
+---
+
+## 2026-08-03 · D-019 · Flores marchitas: colgarse consume la flor (muro 14+)
+
+**Decisión:** a partir del muro 14, toda flor se marchita mientras se cuelga de ella: 4 s de presupuesto de agarre **acumulativo por flor** (un pétalo cada 0,8 s — la flor de 5 pétalos ES el temporizador, sin HUD), y al agotarse la flor cae, suelta a Lumi **con su velocidad exacta** (sin `releaseBoost`: el impulso es el premio de una suelta elegida) y no se puede volver a agarrar. Regla global sin zonas ni excepciones; tutorial (1-10) y primera zona a ciegas (11-13) intactos.
+
+**Por qué:** impedir el descanso infinito colgado, con el mismo contrato que ya vende el bombeo — energía a cambio de compromiso. Acumulativo porque reiniciar al soltar permite descansar a base de micro-toques (derrota el propósito) y porque los pétalos caídos son el estado hecho visible: lo que se ve es lo que hay. Sin zonas porque el juego ya tiene UN vocabulario de zona (la ceguera es la firma); sin excepción para la flor de paso porque una regla con excepciones invisibles es ilegible. El muro 14 estrena la mecánica en aislamiento y deja el tramo con vista 14-22 para interiorizarla antes de que conviva con la ceguera (muro 23).
+
+**Enmienda al GDD:** la línea «si el jugador se queda colgando, el mundo no lo mata — se sostiene solo» era literalmente falsa con esta mecánica. Reescrita: el mundo sigue sin matar por tiempo — la flor te *suelta*, y es la física de siempre la que resuelve. Si mueres después, te mata la caída que ya conocías, no un temporizador.
+
+**Hápticos:** ni pétalo ni caída estrenan señal (el vocabulario es cerrado: seis señales). La caída reutiliza el transient de Suelta — significa «estás desenganchado», y es verdad.
+
+**Puerta de calidad:** `WitherTests` extiende D-008 con el bot de búsqueda aleatoria soltado tras el muro 13: el tramo marchito debe seguir siendo superable.

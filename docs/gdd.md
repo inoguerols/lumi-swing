@@ -28,7 +28,7 @@ Instantánea, sin vidas ni escudos:
 - Colisión del círculo del jugador con un muro (cualquier parte que no sea el hueco).
 - Colisión con suelo o techo.
 
-No hay muerte por tiempo, ni por quedarse quieto: si el jugador se queda colgando de un farol sin avanzar, el mundo no lo mata — la única forma de puntuar es avanzar. Se sostiene solo.
+No hay muerte por tiempo, ni por quedarse quieto: el mundo nunca mata directamente al que no avanza — la única forma de puntuar es avanzar. En el tramo de aprendizaje (muros 1-13) colgarse se sostiene solo, indefinidamente. A partir del muro 14 las flores se marchitan mientras se cuelga de ellas (D-019): la flor agotada *suelta* a Lumi con su velocidad exacta, y es la física de siempre la que resuelve — si muere después, lo mata la caída que ya conocía, no un temporizador.
 
 ## Scoring
 
