@@ -41,6 +41,11 @@ targets:
       path: Sources/Resources/Info.plist
       properties:
         CFBundleDisplayName: Lumi Swing
+        # La versión sigue a MARKETING_VERSION. Tiene que declararse AQUÍ y no
+        # editarse en el .plist: xcodegen reescribe ese archivo en cada generate
+        # (también en CI) y sin esta property lo deja clavado en 1.0 — es lo
+        # que hizo salir las builds 12-16 como v1.0 siendo la v1.1.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         # El juego no usa cifrado propio. Sin esta clave, App Store Connect pregunta
         # por el cumplimiento de exportación en CADA subida y bloquea la compilación
         # hasta que respondes a mano.
