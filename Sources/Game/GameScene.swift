@@ -544,14 +544,21 @@ final class GameScene: SKScene {
             mote.alpha = rng.nextCGFloat(in: 0.2...0.5)
 
             let drift = TimeInterval(Tuning.Scenery.moteDriftDuration * rng.nextCGFloat(in: 0.8...1.4))
+            // El ciclo CIERRA en cero: la bajada deshace exactamente la subida.
+            // Con deltas independientes, cada vuelta de repeatForever sumaba el
+            // mismo desplazamiento neto y las motas se alejaban sin límite.
+            let dx = rng.nextCGFloat(in: -14...14)
+            let dy = rng.nextCGFloat(in: 8...20)
             let up = SKAction.group([
-                .moveBy(x: rng.nextCGFloat(in: -14...14), y: rng.nextCGFloat(in: 8...20), duration: drift),
+                .moveBy(x: dx, y: dy, duration: drift),
                 .fadeAlpha(to: 0.10, duration: drift)
             ])
             let down = SKAction.group([
-                .moveBy(x: rng.nextCGFloat(in: -14...14), y: rng.nextCGFloat(in: -20...(-8)), duration: drift),
-                .fadeAlpha(to: rng.nextCGFloat(in: 0.35...0.5), duration: drift)
+                .moveBy(x: -dx, y: -dy, duration: drift),
+                .fadeAlpha(to: mote.alpha, duration: drift)
             ])
+            up.timingMode = .easeInEaseOut
+            down.timingMode = .easeInEaseOut
             mote.run(.repeatForever(.sequence([up, down])))
             ring.addChild(mote)
         }
@@ -853,8 +860,12 @@ final class GameScene: SKScene {
                                          Tuning.Scenery.haloBrightScale,
                                          haloPulse))
             } else {
-                layer.node.alpha = layer.baseAlpha * flicker
-                layer.node.setScale(scale)
+                // Las capas anchas (ambiente y puente) van QUIETAS: su parpadeo
+                // se leía como ruido por toda la pantalla y competía con las
+                // luces que informan. La vida del aura queda en el halo pequeño,
+                // que además late con el háptico. (Feedback de Nacho 2026-08-03:
+                // «el aura resta más que suma».)
+                layer.node.alpha = layer.baseAlpha
             }
         }
         lightGroup.position = Effects.auraDrift(time: auraTime, amplitudeScale: amplitude)

@@ -801,7 +801,7 @@ enum Tuning {
         /// Luz ambiente: el halo más ancho y tenue de todos, el que aclara la selva
         /// alrededor de Lumi. Radio en múltiplos de `Player.radius`.
         static let ambientRadiusScale: CGFloat = 3.6
-        static let ambientAlpha: CGFloat = 0.17
+        static let ambientAlpha: CGFloat = 0.10
         /// Halo puente entre el halo del cuerpo (1,8·r) y el ambiente (3,6·r):
         /// sin él, la luz caía a saltos y el canto del bloom se veía como un aro.
         static let midHaloRadiusScale: CGFloat = 2.9
