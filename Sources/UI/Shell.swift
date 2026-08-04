@@ -74,11 +74,11 @@ struct FireflySwarm: View {
     let count: Int
 
     var body: some View {
-        // 30 Hz de tope: `.animation` a pelo va al ritmo del display (120 en
+        // 60 Hz de tope: `.animation` a pelo va al ritmo del display (120 en
         // ProMotion, saltándose el mismo tope térmico que preferredFramesPerSecond
-        // 60 en PenduloApp). Las Lissajous van a 0,17/0,13 rad/s: a 30 fps el
-        // vuelo es indistinguible.
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+        // 60 en PenduloApp). A 30 se veía a cortes en device (playtest 2026-08-04);
+        // 60 iguala la cadencia de la escena y sigue ahorrando la mitad en ProMotion.
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
             Canvas { drawing, size in
                 let time = context.date.timeIntervalSinceReferenceDate
 
