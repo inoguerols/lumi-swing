@@ -1152,9 +1152,10 @@ final class GameScene: SKScene {
     }
 
     /// Tras una interrupción (banner de notificación, llamada) el display link
-    /// puede quedarse renegociado a 60 Hz. Re-pedir 120 al volver es gratis.
+    /// puede quedar renegociado a otra cadencia. Re-afirmar los 60 Hz de la app
+    /// (tope térmico: a 120 el teléfono se calentaba) al volver es gratis.
     func refreshFrameRate() {
-        view?.preferredFramesPerSecond = 120
+        view?.preferredFramesPerSecond = 60
     }
 
     // MARK: - Pausa por interrupción

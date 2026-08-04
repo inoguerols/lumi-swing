@@ -49,7 +49,9 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            SpriteView(scene: scene, preferredFramesPerSecond: 120)
+            // 60 Hz fijo: a 120 el iPhone se calentaba en sesiones largas y el
+            // péndulo no gana suavidad apreciable con el doble de frames.
+            SpriteView(scene: scene, preferredFramesPerSecond: 60)
                 .ignoresSafeArea()
                 // Altura fija, ancho según el aspecto de la vista (D-023): en
                 // iPad/Mac la escena se ensancha en vez de recortarse en
