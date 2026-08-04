@@ -965,6 +965,10 @@ final class GameScene: SKScene {
             holeRadius: 512 * Tuning.Scenery.lightHoleRadius / veilSide)
         darknessNode.size = CGSize(width: veilSide, height: veilSide)
         darknessNode.alpha = 0
+        // Oculto de verdad: con alpha 0 SpriteKit sigue rasterizando el quad a
+        // pantalla completa (solo isHidden lo saca del pipeline). updateDarkness
+        // lo desoculta en el primer frame de telegrafiado.
+        darknessNode.isHidden = true
         darknessNode.zPosition = 10
         worldNode.addChild(darknessNode)
 
@@ -1216,6 +1220,9 @@ final class GameScene: SKScene {
 
         darkness = 0
         darknessNode.alpha = 0
+        // updateDarkness no corre fuera de .playing: sin esto el velo se seguiría
+        // dibujando (invisible) durante todo el menú y el game over.
+        darknessNode.isHidden = true
         darknessNode.removeAllActions()
         darknessNode.setScale(1)
         proximityBucket = nil
@@ -1366,6 +1373,11 @@ final class GameScene: SKScene {
         let rate = 1 / Tuning.BlindZone.darkenDuration
         darkness = lerp(darkness, target, 1 - exponentialDecay(rate: rate, dt: dt))
         darknessNode.alpha = darkness * peak
+        // El lerp exponencial nunca llega a 0 exacto: fuera de zona a ciegas el velo
+        // quedaría eternamente a alpha ínfimo pero rasterizándose a pantalla
+        // completa. 0.004 está ~200 veces por debajo del pico (darkAlpha 0.96);
+        // subirlo metería un pop en el arranque del telegrafiado.
+        darknessNode.isHidden = darknessNode.alpha < 0.004
     }
 
     /// 0-1: cuánto está «dentro» del anticipo ahora mismo, derivado del velo.
