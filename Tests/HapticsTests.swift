@@ -136,6 +136,29 @@ struct HapticsTests {
         #expect(await engine.isRunning)
     }
 
+    /// El bloqueo del feedback de TestFlight (2026-08-04): morir columpiando y
+    /// quedarse la vibración puesta para siempre. Los updates por-frame salen de
+    /// la escena como Tasks sueltos, sin orden garantizado: uno creado justo
+    /// antes de morir puede aterrizar tras el stopContinuous() de la muerte y
+    /// rearrancar el continuo, que ya nadie para. El contrato: la muerte
+    /// enmudece el mapa hasta que la escena arma la partida siguiente.
+    @Test("Un update tardío no resucita la vibración después de morir")
+    func deathSuppressesLateContinuousUpdates() async {
+        let engine = CoreHapticsEngine(hardwareStartOverride: { true })
+        await engine.prepare()
+
+        await engine.play(.death)
+        await engine.updateProximity(distance: 1)
+        await engine.updateAlignment(clearance: 5)
+        #expect(await engine.continuousActive == false,
+                "el update en vuelo aterrizó tarde y no puede rearrancar el continuo")
+
+        await engine.resetForRun()
+        await engine.updateProximity(distance: 1)
+        #expect(await engine.continuousActive,
+                "la partida nueva levanta la mordaza y recupera el mapa háptico")
+    }
+
     @Test("El guard perezoso de play() también rescata un motor parado")
     func playRevivesStoppedEngine() async {
         let engine = CoreHapticsEngine(hardwareStartOverride: { true })

@@ -17,6 +17,12 @@ actor CoreHapticsEngine: HapticsEngine {
     private var proximityPlayer: CHHapticAdvancedPatternPlayer?
 
     private var alignmentActive = false
+    /// La muerte enmudece el mapa continuo hasta la partida siguiente. Sin esto,
+    /// un `updateAlignment`/`updateProximity` por-frame creado justo antes de
+    /// morir puede aterrizar en el actor DESPUÉS del `stopContinuous()` de la
+    /// muerte (los Task sueltos no garantizan orden) y rearrancar el player en
+    /// loop — vibración infinita en el game over (feedback TestFlight 2026-08-04).
+    private var continuousSuppressed = false
     private var currentCue: ProximityCue?
     private var proximityLoop: Task<Void, Never>?
     private var ensureTask: Task<Void, Never>?
@@ -218,7 +224,12 @@ actor CoreHapticsEngine: HapticsEngine {
     func play(_ signal: HapticSignal) async {
         // La muerte cancela todo antes de sonar: un continuous huérfano por encima
         // del golpe final ensucia justo el momento que tiene que cerrar la partida.
-        if signal == .death { await stopContinuous() }
+        // El flag va ANTES del await: el actor es reentrante y un update en vuelo
+        // podría colarse durante la suspensión de stopContinuous().
+        if signal == .death {
+            continuousSuppressed = true
+            await stopContinuous()
+        }
 
         if audioEnabled { await audio.play(signal) }
 
@@ -233,6 +244,7 @@ actor CoreHapticsEngine: HapticsEngine {
     // MARK: - Proximidad (el ritmo es la distancia)
 
     func updateProximity(distance: CGFloat?) async {
+        guard !continuousSuppressed else { return }
         let cue = distance.flatMap(ProximityMapping.cue(forDistance:))
         currentCue = cue
 
@@ -279,6 +291,7 @@ actor CoreHapticsEngine: HapticsEngine {
     // MARK: - Alineación (la presencia es el sí)
 
     func updateAlignment(clearance: CGFloat?) async {
+        guard !continuousSuppressed else { return }
         let intensity = clearance.flatMap(ProximityMapping.alignmentIntensity(clearance:))
         await audio.updateAlignment(intensity: audioEnabled ? intensity : nil)
 
@@ -309,6 +322,20 @@ actor CoreHapticsEngine: HapticsEngine {
             }
         }
     }
+
+    /// Lo llama la escena al armar mundo nuevo (partida o menú): silencia lo que
+    /// suene y levanta la mordaza de la muerte anterior.
+    /// ponytail: si el play(.death) en vuelo aterrizara DESPUÉS de esto (restart
+    /// en el mismo instante de morir, irreal con UI de por medio), la mordaza
+    /// quedaría puesta una partida; se cura sola en el siguiente restart.
+    func resetForRun() async {
+        continuousSuppressed = false
+        await stopContinuous()
+    }
+
+    /// Continuo vivo ahora mismo (bucle de proximidad o textura de alineación).
+    /// Interno para que el test del contrato de la muerte pueda observarlo.
+    var continuousActive: Bool { proximityLoop != nil || alignmentActive }
 
     func stopContinuous() async {
         currentCue = nil

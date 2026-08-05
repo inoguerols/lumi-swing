@@ -1247,7 +1247,7 @@ final class GameScene: SKScene {
         bodyGroup.xScale = 1
         bodyGroup.yScale = 1
         let haptics = self.haptics
-        Task { await haptics.stopContinuous() }
+        Task { await haptics.resetForRun() }
 
         syncWorld()
         cameraBase = CameraController.target(for: simulation.body.position)

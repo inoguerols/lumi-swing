@@ -44,6 +44,10 @@ protocol HapticsEngine: Sendable {
 
     /// Al salir de una zona a ciegas, al morir y al irse a background.
     func stopContinuous() async
+
+    /// Al armar mundo nuevo (partida o menú): silencia lo que suene y levanta la
+    /// mordaza que puso la muerte sobre el mapa continuo.
+    func resetForRun() async
 }
 
 // MARK: - Mapeo (puro y testeable)
@@ -116,4 +120,5 @@ actor MockHapticsEngine: HapticsEngine {
     func updateAlignment(clearance: CGFloat?) { alignment.append(clearance) }
     func setAmbience(gain: CGFloat) { ambience.append(gain) }
     func stopContinuous() { stops += 1 }
+    func resetForRun() { stops += 1 }
 }
